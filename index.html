@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Optimizer</title>
+    <title>Sum-10 Focus Solver</title>
     <style>
         :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --gold: #ffd700; --green: #00c853; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -19,34 +19,37 @@
         .panel { width: 320px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); }
         .status { font-weight: bold; margin-bottom: 15px; color: var(--accent); min-height: 1.2em; font-size: 0.9em; }
         
-        .btn { width: 100%; padding: 15px; border: none; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; background: #444; color: white; transition: 0.2s;}
-        .btn.active { background: var(--accent); color: #000; box-shadow: 0 0 15px rgba(0, 229, 255, 0.4); }
-        .btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none;}
+        .btn { width: 100%; padding: 20px; border: none; border-radius: 4px; font-weight: bold; font-size: 18px; cursor: pointer; background: #333; color: #777; transition: 0.1s; margin-top: 10px;}
+        .btn.active { background: var(--green); color: #000; box-shadow: 0 0 15px rgba(0, 200, 83, 0.4); animation: pulse 2s infinite; }
+        .btn:active { transform: translateY(2px); }
+        .btn:disabled { opacity: 0.3; cursor: not-allowed; animation: none; }
+
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 200, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0); } }
 
         .slider-box { margin: 15px 0; padding: 10px; background: #2a2a2a; border-radius: 4px; border: 1px solid #333; }
         .slider-header { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
 
-        .legend { margin-top: 20px; font-size: 0.8em; color: #aaa; display: grid; gap: 5px; }
-        .legend-item { display: flex; align-items: center; gap: 8px; }
-        .box { width: 12px; height: 12px; border: 2px solid white; display: inline-block; }
+        .info-text { font-size: 0.8em; color: #aaa; margin-top: 20px; text-align: center; line-height: 1.5; }
+        .highlight { color: var(--gold); font-weight: bold; }
 
         /* Correction Tooltip */
-        .tooltip { position: absolute; background: rgba(0,0,0,0.9); padding: 10px; border: 1px solid #fff; border-radius: 4px; pointer-events: none; display: none; transform: translate(-50%, -100%); margin-top: -10px; text-align: center; z-index: 100;}
-        .tooltip-img { width: 32px; height: 32px; border: 1px solid #555; display: block; margin: 0 auto 5px; image-rendering: pixelated; }
+        .tooltip { position: absolute; background: rgba(0,0,0,0.95); padding: 15px; border: 1px solid #fff; border-radius: 6px; pointer-events: none; display: none; transform: translate(-50%, -100%); margin-top: -15px; text-align: center; z-index: 100; box-shadow: 0 5px 15px black;}
+        .tooltip-img { width: 48px; height: 48px; border: 1px solid #555; display: block; margin: 0 auto 10px; image-rendering: pixelated; }
+        .tooltip-hint { color: var(--gold); font-size: 12px; margin-top: 5px; }
     </style>
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">hopeful stakes</h2>
+    <h2 style="color:var(--accent); margin-top:0;">satsuki sho</h2>
     
     <div class="layout">
         <div class="stage" id="stageContainer">
             <canvas id="mainCanvas"></canvas>
             <canvas id="overlayCanvas"></canvas>
-            <!-- Correction Tooltip -->
             <div id="correctionTooltip" class="tooltip">
                 <canvas id="tooltipCanvas" class="tooltip-img"></canvas>
-                <div>Type 1-9</div>
+                <div>Type Correct Number</div>
+                <div class="tooltip-hint">(Press 'X' to delete)</div>
             </div>
         </div>
 
@@ -58,12 +61,13 @@
                 <input type="range" id="threshold" min="100" max="250" value="180" style="width:100%" oninput="process()">
             </div>
 
-            <button id="solveBtn" class="btn" disabled onclick="applyMoves()">CONFIRM MOVES</button>
+            <button id="solveBtn" class="btn" disabled onclick="applyMove()">MOVE DONE</button>
             
-            <div class="legend">
-                <div class="legend-item"><span class="box" style="border-color:var(--gold); background:rgba(255, 215, 0, 0.2)"></span> 3+ Numbers (High Priority)</div>
-                <div class="legend-item"><span class="box" style="border-color:var(--green); background:rgba(0, 200, 83, 0.2)"></span> 2 Numbers (Standard)</div>
-                <div style="margin-top:10px; color:#666;">Click any number on the board to fix it.</div>
+            <div class="info-text">
+                1. Perform the <span class="highlight">Green Highlighted</span> move.<br>
+                2. Click <span class="highlight">MOVE DONE</span>.<br>
+                3. Repeat.<br><br>
+                <span style="color:#666; font-size:0.9em">(Click any large yellow number to correct it)</span>
             </div>
             
             <div style="margin-top:20px; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
@@ -78,7 +82,7 @@
     const COLS = 10;
     const NORM_SIZE = 16;
     
-    // --- PRE-LOADED SHAPES (ASCII Heuristics) ---
+    // --- ASCII HEURISTICS (Baseline) ---
     const ASCII_DIGITS = {
         1: ["  #  "," ##  ","  #  ","  #  ","  #  ","  #  "," ### "],
         2: [" ### ","#   #","    #","   # ","  #  "," #   ","#####"],
@@ -96,8 +100,8 @@
     let srcImg = null;
     let gridData = [];
     let blobs = [];
-    let currentPlan = []; // List of best moves
-    let userMemory = JSON.parse(localStorage.getItem('sum10_opt_mem')) || [];
+    let currentMove = null;
+    let userMemory = JSON.parse(localStorage.getItem('sum10_focus_mem')) || [];
     let systemMemory = [];
 
     // --- INIT ---
@@ -126,6 +130,8 @@
         const rect = stage.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
+        
+        // Find clicked blob
         const clicked = blobs.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
 
         if(clicked) {
@@ -154,22 +160,21 @@
         if(correctionTarget && e.key >= '0' && e.key <= '9') {
             const num = parseInt(e.key);
             userMemory.push({ label: num, data: correctionTarget.feature });
-            localStorage.setItem('sum10_opt_mem', JSON.stringify(userMemory));
+            localStorage.setItem('sum10_focus_mem', JSON.stringify(userMemory));
             tooltip.style.display = 'none';
             correctionTarget = null;
-            process();
+            process(); // Re-process to apply correction everywhere
         }
-        if(correctionTarget && (e.key === 'Escape' || e.key === 'x')) {
-             userMemory.push({ label: -1, data: correctionTarget.feature }); // Garbage
-             localStorage.setItem('sum10_opt_mem', JSON.stringify(userMemory));
+        if(correctionTarget && (e.key.toLowerCase() === 'x' || e.key === 'Delete')) {
+             userMemory.push({ label: -1, data: correctionTarget.feature });
+             localStorage.setItem('sum10_focus_mem', JSON.stringify(userMemory));
              tooltip.style.display = 'none';
              correctionTarget = null;
              process();
         }
     });
 
-
-    // --- PROCESSING ---
+    // --- MAIN PIPELINE ---
     function process() {
         if(!srcImg) return;
         
@@ -185,57 +190,41 @@
 
         ctx.drawImage(srcImg, 0, 0);
 
-        // 1. Detect
         const raw = ctx.getImageData(0,0,cvs.width,cvs.height);
         blobs = detectBlobs(raw, cvs.width, cvs.height, thresh);
-
-        // 2. Map
         gridData = mapBlobsToGrid(blobs);
 
-        // 3. Recognize
-        let foundCount = 0;
+        // Recognize
         blobs.forEach(b => {
             if(b.gridR === null) return;
             b.feature = extractFeature(ctx, b);
             
             let match = findBestMatch(b.feature, userMemory);
-            if(!match) match = findBestMatch(b.feature, systemMemory, 50); // Higher tolerance for fuzzy sys match
+            if(!match) match = findBestMatch(b.feature, systemMemory, 50);
 
             if(match) {
                 if(match.label !== -1) {
                     gridData[b.gridR][b.gridC] = match.label;
                     b.label = match.label;
-                    foundCount++;
                 } else {
                     b.isGarbage = true;
                 }
             } else {
-                // If totally unsure, assume 0 (blank) to be safe, or guess wild
-                // For safety in optimization, better to miss a number than invent one
-                // But let's try a forced guess for UX
                 const forced = findBestMatch(b.feature, systemMemory, Infinity);
                 gridData[b.gridR][b.gridC] = forced.label;
                 b.label = forced.label;
                 b.lowConf = true;
-                foundCount++;
             }
         });
 
-        // 4. Optimize
-        optimizeBoard();
-
-        if(foundCount > 0) {
-            document.getElementById('status').innerText = `Scan Complete. Found ${currentPlan.length} move sets.`;
-        } else {
-            document.getElementById('status').innerText = "No numbers visible.";
-        }
+        // Start Solver loop
+        solveNext();
     }
 
-    // --- THE OPTIMIZER ---
-    function optimizeBoard() {
+    // --- SOLVER (Single Step) ---
+    function solveNext() {
         let allMoves = [];
         
-        // 1. Find ALL valid rectangles
         for (let r1=0; r1<ROWS; r1++) {
             for (let c1=0; c1<COLS; c1++) {
                 for (let r2=r1; r2<ROWS; r2++) {
@@ -249,8 +238,6 @@
                         }
                         
                         if(sum === 10 && count > 0) {
-                            // Calculate Score
-                            // Count is king. Area is tie breaker (larger area eats more blanks, usually good)
                             allMoves.push({
                                 r1, c1, r2, c2, count,
                                 area: (r2-r1+1)*(c2-c1+1)
@@ -261,125 +248,104 @@
             }
         }
 
-        // 2. Sort Moves by Quality
-        // Priority 1: Count (Descending) -> 3 numbers > 2 numbers
-        // Priority 2: Area (Descending) -> Clearing more blanks is usually better to shift board
+        // Sort: Priority 1 = Count, Priority 2 = Area
         allMoves.sort((a, b) => {
             if (b.count !== a.count) return b.count - a.count;
             return b.area - a.area;
         });
 
-        // 3. Select Non-Overlapping Set
-        currentPlan = [];
-        let occupied = new Set(); // Stores "r,c"
-
-        for (let m of allMoves) {
-            let clash = false;
-            // Check overlap
-            for(let i=m.r1; i<=m.r2; i++){
-                for(let j=m.c1; j<=m.c2; j++){
-                    if(occupied.has(`${i},${j}`)) clash = true;
-                }
-            }
-
-            if(!clash) {
-                currentPlan.push(m);
-                // Mark occupied
-                for(let i=m.r1; i<=m.r2; i++){
-                    for(let j=m.c1; j<=m.c2; j++){
-                        occupied.add(`${i},${j}`);
-                    }
-                }
-            }
-        }
-
-        drawResults();
+        // Pick ONLY the best move
+        currentMove = allMoves.length > 0 ? allMoves[0] : null;
+        
+        drawScene();
     }
 
     // --- DRAWING ---
-    function drawResults() {
+    function drawScene() {
         const cvs = document.getElementById('overlayCanvas');
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // 1. Draw Numbers
+        // 1. Draw ALL Numbers (Large & Clear)
         blobs.forEach(b => {
             if(b.isGarbage || !b.label) return;
-            ctx.fillStyle = b.lowConf ? "#ffff00" : "#ffffff";
-            ctx.font = "bold 12px monospace";
-            ctx.fillText(b.label, b.x+2, b.y-2);
+            
+            // Calculate center
+            const cx = b.x + b.w/2;
+            const cy = b.y + b.h/2;
+
+            ctx.font = "bold 24px monospace"; // BIG TEXT
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            
+            // Stroke (Outline) for readability
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "black";
+            ctx.strokeText(b.label, cx, cy);
+
+            // Fill
+            ctx.fillStyle = b.lowConf ? "#ffff00" : "#ffeb3b"; // Bright Yellow
+            ctx.fillText(b.label, cx, cy);
         });
 
-        // 2. Draw Plan Boxes
+        // 2. Draw The Single Best Move
         const btn = document.getElementById('solveBtn');
-        if(currentPlan.length > 0) {
+        
+        if(currentMove) {
             btn.disabled = false;
             btn.className = "btn active";
-            btn.innerHTML = `DO ${currentPlan.length} MOVES (Click to Clear)`;
+            btn.innerHTML = `MOVE DONE<br><span style="font-size:0.6em; font-weight:normal">Clears ${currentMove.count} numbers</span>`;
+            document.getElementById('status').innerText = `Best Move Found! Clears ${currentMove.count}.`;
 
-            // Helper to get pixel bounds from grid coords
-            // (Reusing the mapBlobs logic inversely or just finding min/max blobs in region)
-            // For accuracy, we find the blobs involved
+            // Find bounds
+            let minX=9999, maxX=0, minY=9999, maxY=0;
+            let found = false;
             
-            currentPlan.forEach(m => {
-                let minX=9999, maxX=0, minY=9999, maxY=0;
-                let found = false;
-                blobs.forEach(b => {
-                     // Check if blob center is inside grid cell
-                     // This is robust against drift
-                    if(b.gridR >= m.r1 && b.gridR <= m.r2 && b.gridC >= m.c1 && b.gridC <= m.c2) {
-                        if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
-                        if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;
-                        found=true;
-                    }
-                });
-
-                if(found) {
-                    const isGold = m.count >= 3;
-                    const color = isGold ? "rgba(255, 215, 0" : "rgba(0, 200, 83"; // Gold vs Green
-                    
-                    ctx.fillStyle = color + ", 0.3)";
-                    ctx.strokeStyle = color + ", 1)";
-                    ctx.lineWidth = isGold ? 4 : 2;
-
-                    const p = 4;
-                    ctx.fillRect(minX-p, minY-p, (maxX-minX)+p*2, (maxY-minY)+p*2);
-                    ctx.strokeRect(minX-p, minY-p, (maxX-minX)+p*2, (maxY-minY)+p*2);
-
-                    // Draw Count Badge
-                    ctx.fillStyle = "black";
-                    ctx.fillRect(minX-p, minY-p-15, 20, 15);
-                    ctx.fillStyle = "white";
-                    ctx.font = "bold 10px sans-serif";
-                    ctx.fillText(m.count, minX-p+7, minY-p-4);
+            blobs.forEach(b => {
+                if(b.gridR >= currentMove.r1 && b.gridR <= currentMove.r2 && 
+                   b.gridC >= currentMove.c1 && b.gridC <= currentMove.c2 && !b.isGarbage) {
+                    if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
+                    if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;
+                    found=true;
                 }
             });
+
+            if(found) {
+                const pad = 6;
+                ctx.strokeStyle = "#00e676"; // Bright Green
+                ctx.lineWidth = 5;
+                ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
+                
+                ctx.fillStyle = "rgba(0, 230, 118, 0.2)";
+                ctx.fillRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
+            }
+
         } else {
             btn.disabled = true;
             btn.className = "btn";
             btn.innerHTML = "NO MOVES FOUND";
+            document.getElementById('status').innerText = "Board cleared or no moves left.";
         }
     }
 
-    function applyMoves() {
-        if(currentPlan.length === 0) return;
-        // Zero out data
-        currentPlan.forEach(m => {
-            for(let r=m.r1; r<=m.r2; r++) {
-                for(let c=m.c1; c<=m.c2; c++) {
-                    gridData[r][c] = 0;
-                }
-            }
-        });
-        // Filter blobs to prevent re-detecting them in this session
-        // (Simulates them being removed)
-        let occupied = new Set();
-        currentPlan.forEach(m => {
-             for(let r=m.r1; r<=m.r2; r++) for(let c=m.c1; c<=m.c2; c++) occupied.add(`${r},${c}`);
-        });
-        blobs = blobs.filter(b => !occupied.has(`${b.gridR},${b.gridC}`));
+    function applyMove() {
+        if(!currentMove) return;
         
-        optimizeBoard(); // Find next set of moves immediately
+        // 1. Zero out the grid data for this move
+        for(let r=currentMove.r1; r<=currentMove.r2; r++) {
+            for(let c=currentMove.c1; c<=currentMove.c2; c++) {
+                gridData[r][c] = 0;
+            }
+        }
+
+        // 2. Remove the associated blobs visually so they disappear
+        blobs = blobs.filter(b => 
+            !(b.gridR >= currentMove.r1 && b.gridR <= currentMove.r2 && 
+              b.gridC >= currentMove.c1 && b.gridC <= currentMove.c2)
+        );
+
+        // 3. Immediately find next move
+        solveNext();
     }
 
     // --- UTILS ---
@@ -446,7 +412,7 @@
     }
 
     function resetMem() {
-        if(confirm("Clear memory?")) { localStorage.removeItem('sum10_opt_mem'); userMemory=[]; process(); }
+        if(confirm("Clear memory?")) { localStorage.removeItem('sum10_focus_mem'); userMemory=[]; process(); }
     }
 </script>
 </body>
