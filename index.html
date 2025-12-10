@@ -327,6 +327,10 @@
     }
 
     // --- STRATEGY ENGINE ---
+  // Configuration for the "Brain"
+    const SEARCH_DEPTH = 3;  // Look 3 moves ahead (Increase to 4 for smarter but slower)
+    const BEAM_WIDTH = 20;   // Keep track of the top 20 best paths
+
     function calculateStrategicMove() {
         const currentMoves = getAllMoves(gridData);
         
@@ -335,49 +339,107 @@
             return;
         }
 
-        const candidates = currentMoves.slice(0, 15);
-        let bestStrategy = null;
-        let maxTotalPoints = -1;
-
-        for (let move of candidates) {
+        // Initialize Search: Map all current valid moves to game states
+        let currentStates = currentMoves.map(move => {
             const simGrid = cloneGrid(gridData);
             applyMoveToGrid(simGrid, move);
-            
-            const nextMoves = getAllMoves(simGrid);
-            const bestNext = nextMoves.length > 0 ? nextMoves[0] : null;
-            
-            const nextScore = bestNext ? bestNext.count : 0;
-            const totalScore = move.count + nextScore;
+            return {
+                grid: simGrid,
+                totalScore: move.count,    // Total cleared in this path
+                firstMove: move,           // The move we actually make right now
+                maxSingle: move.count      // Track largest single move in this path
+            };
+        });
 
-            if (totalScore > maxTotalPoints) {
-                maxTotalPoints = totalScore;
-                bestStrategy = move;
-                bestStrategy.predictedNext = nextScore;
+        // Loop forward to find the best future outcomes
+        for (let d = 1; d < SEARCH_DEPTH; d++) {
+            let nextStates = [];
+            
+            // Sort states so we only process the most promising ones (The Beam)
+            // Priority: 1. Total Cleared, 2. Max Single Move size
+            currentStates.sort((a, b) => {
+                if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+                return b.maxSingle - a.maxSingle;
+            });
+            currentStates = currentStates.slice(0, BEAM_WIDTH);
+
+            // Expand each promising state
+            for (let state of currentStates) {
+                const possibleNextMoves = getAllMoves(state.grid);
+                
+                if (possibleNextMoves.length === 0) {
+                    nextStates.push(state); // Path ends here, keep it
+                    continue;
+                }
+
+                // Only consider top 10 branches per state to keep speed high
+                const candidates = possibleNextMoves.slice(0, 10);
+
+                for (let nextMove of candidates) {
+                    const nextGrid = cloneGrid(state.grid);
+                    applyMoveToGrid(nextGrid, nextMove);
+
+                    nextStates.push({
+                        grid: nextGrid,
+                        totalScore: state.totalScore + nextMove.count,
+                        firstMove: state.firstMove, // Remember the move that started this chain
+                        maxSingle: Math.max(state.maxSingle, nextMove.count)
+                    });
+                }
+            }
+            
+            // If we found valid extensions, update our current list
+            if (nextStates.length > 0) {
+                currentStates = nextStates;
+            } else {
+                break; // No further moves possible anywhere
             }
         }
 
-        currentMove = bestStrategy;
+        // Final Sort to pick the winner
+        currentStates.sort((a, b) => {
+            if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+            return b.maxSingle - a.maxSingle;
+        });
+
+        const bestState = currentStates[0];
+        currentMove = bestState.firstMove;
+        
+        // Update predictedNext so the UI shows how many points this path yields
+        // Logic: (Total Path Score) - (Immediate Move Score)
+        currentMove.predictedNext = bestState.totalScore - currentMove.count; 
     }
 
     function getAllMoves(grid) {
         let moves = [];
-        for (let r1=0; r1<ROWS; r1++) {
-            for (let c1=0; c1<COLS; c1++) {
-                for (let r2=r1; r2<ROWS; r2++) {
-                    for (let c2=c1; c2<COLS; c2++) {
-                        let sum=0, count=0;
+        const R = grid.length;
+        const C = grid[0].length;
+
+        for (let r1 = 0; r1 < R; r1++) {
+            for (let c1 = 0; c1 < C; c1++) {
+                // Optimization: Skip loop if starting cell is garbage
+                if (grid[r1][c1] === -1) continue; 
+
+                for (let r2 = r1; r2 < R; r2++) {
+                    for (let c2 = c1; c2 < C; c2++) {
+                        let sum = 0;
+                        let count = 0;
                         let blocked = false;
 
-                        for(let i=r1; i<=r2; i++){
-                            for(let j=c1; j<=c2; j++){
+                        // Calculate sum of the rectangle
+                        calcLoop:
+                        for(let i = r1; i <= r2; i++){
+                            for(let j = c1; j <= c2; j++){
                                 let v = grid[i][j];
-                                if (v === -1) { blocked = true; break; } 
-                                sum+=v; 
-                                if(v>0) count++;
+                                if (v === -1) { blocked = true; break calcLoop; }
+                                sum += v;
+                                if(v > 0) count++;
+                                
+                                // Optimization: Stop immediately if sum exceeds 10
+                                if (sum > 10) break calcLoop; 
                             }
-                            if(blocked) break;
                         }
-                        
+
                         if(!blocked && sum === 10 && count > 1) {
                             moves.push({
                                 r1, c1, r2, c2, count,
@@ -388,6 +450,7 @@
                 }
             }
         }
+        // Initial sort by Count Descending (helps the Beam Search prune bad moves early)
         return moves.sort((a, b) => b.count - a.count);
     }
 
