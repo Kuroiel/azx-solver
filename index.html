@@ -3,18 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Smart Grid Solver</title>
+    <title>Sum-10 Pro (Stable Paste)</title>
     <style>
         :root { --bg: #121212; --panel: #1e1e1e; --accent: #2979ff; --gold: #ffd740; --green: #00e676; --error: #ff1744; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; height: 100vh; margin: 0; }
         
-        /* Layout: Left Panel, Right Image */
-        .layout { display: flex; flex-direction: row-reverse; gap: 20px; flex-wrap: wrap-reverse; justify-content: center; align-items: flex-start; }
+        /* Layout */
+        .layout { display: flex; flex-direction: row-reverse; gap: 20px; flex-wrap: wrap-reverse; justify-content: center; align-items: flex-start; width: 100%; max-width: 1200px; }
         
-        /* Interactive Stage */
-        .stage { position: relative; border: 2px solid #444; background: #000; cursor: crosshair; }
-        canvas { display: block; image-rendering: pixelated; }
+        /* Interactive Stage (Focus Target) */
+        .stage { 
+            position: relative; 
+            border: 3px dashed #444; 
+            background: #080808; 
+            cursor: crosshair; 
+            min-width: 400px; 
+            min-height: 300px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+            outline: none; /* Custom focus style below */
+            transition: border-color 0.2s;
+        }
+        .stage:focus, .stage:active { border-color: var(--accent); background: #0f0f0f; }
+        
+        canvas { display: block; image-rendering: pixelated; max-width: 100%; }
         #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+        
+        .placeholder-text { pointer-events: none; color: #555; font-size: 1.5em; font-weight: bold; text-align: center; }
         
         /* Controls */
         .panel { width: 300px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
@@ -41,11 +57,16 @@
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">Tenno Sho (Autumn)</h2>
+    <h2 style="color:var(--accent); margin-top:0;">Shuka Sho</h2>
     
     <div class="layout">
-        <div class="stage" id="stageContainer">
-            <canvas id="mainCanvas"></canvas>
+        <!-- Added tabindex="0" to make this div focusable for pasting -->
+        <div class="stage" id="stageContainer" tabindex="0">
+            <div id="placeholder" class="placeholder-text">
+                CLICK HERE<br>
+                <span style="font-size:0.6em; font-weight:normal; color:#444;">THEN PRESS CTRL+V</span>
+            </div>
+            <canvas id="mainCanvas" style="display:none"></canvas>
             <canvas id="overlayCanvas"></canvas>
             <div id="correctionTooltip" class="tooltip">
                 <canvas id="tooltipCanvas" class="tooltip-img"></canvas>
@@ -54,7 +75,7 @@
         </div>
 
         <div class="panel">
-            <div id="status" class="status">Paste screenshot (Ctrl+V)</div>
+            <div id="status" class="status">Waiting for image...</div>
 
             <div class="slider-box">
                 <div class="slider-header"><span>Contrast Filter</span> <span id="threshVal">140</span></div>
@@ -64,10 +85,9 @@
             <button id="solveBtn" class="btn" disabled onclick="applyMove()">MOVE DONE</button>
             
             <div class="info-text">
-                <b>Look for RED boxes.</b><br>
-                <span class="warning">Red Box = Unknown Number.</span><br>
-                The solver will NOT use Red boxes to prevent math errors.<br>
-                Click a Red Box to teach it.
+                <span class="warning">Red Box = Unknown/Blocked</span><br>
+                The solver ignores Red boxes to prevent math errors.<br>
+                <b>Click a Red Box to fix it.</b>
             </div>
             
             <div style="margin-top:auto; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
@@ -101,22 +121,29 @@
     let currentMove = null;
     let userMemory = JSON.parse(localStorage.getItem('sum10_pro_mem')) || [];
     let systemMemory = [];
-
-    // Grid Bounds for Visualization
     let gridMetrics = { minX:0, maxX:0, minY:0, maxY:0 };
 
     // --- INIT ---
     generateSystemMemory();
     
-    // --- EVENTS ---
-    window.addEventListener('paste', e => {
+    // --- PASTE HANDLER (Attached to document for reliability) ---
+    document.addEventListener('paste', e => {
+        e.preventDefault(); // Stop default paste behavior
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let item of items) {
             if (item.type.indexOf('image') !== -1) {
                 const blob = item.getAsFile();
                 const img = new Image();
                 img.src = URL.createObjectURL(blob);
-                img.onload = () => { srcImg = img; process(); };
+                document.getElementById('status').innerText = "Processing Image...";
+                
+                img.onload = () => { 
+                    srcImg = img; 
+                    // Hide placeholder, show canvas
+                    document.getElementById('placeholder').style.display = 'none';
+                    document.getElementById('mainCanvas').style.display = 'block';
+                    process(); 
+                };
             }
         }
     });
@@ -125,6 +152,9 @@
     const tooltip = document.getElementById('correctionTooltip');
     let correctionTarget = null; 
 
+    // Focus stage on click to ensure paste works
+    stage.addEventListener('click', () => stage.focus());
+
     // Handle Clicking on Numbers to Fix
     stage.addEventListener('mousedown', e => {
         if(!srcImg) return;
@@ -132,7 +162,6 @@
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
-        // Find clicked blob
         const clicked = blobs.find(b => 
             x >= b.x - 5 && x <= b.x + b.w + 5 && 
             y >= b.y - 15 && y <= b.y + b.h + 5
@@ -196,10 +225,10 @@
 
         const raw = ctx.getImageData(0,0,cvs.width,cvs.height);
         
-        // 1. Detect
+        // 1. Detect (Optimized)
         blobs = detectBlobs(raw, cvs.width, cvs.height, thresh);
         
-        // 2. Map (Using Dynamic Range)
+        // 2. Map (Using Dynamic Range & Outlier Filter)
         gridData = mapBlobsToGrid(blobs);
 
         // 3. Recognize
@@ -216,24 +245,10 @@
                     b.label = match.label;
                 } else {
                     b.isGarbage = true;
-                    // Garbage means "Valid Empty Space" or "Ignore"? 
-                    // In this game, garbage usually means bucket rim.
-                    // If it's a bucket rim, it's NOT a number, but it occupies space.
-                    // For safety: Treat as Blocked.
-                    gridData[b.gridR][b.gridC] = -1; 
+                    gridData[b.gridR][b.gridC] = -1; // Mark as Blocked
                 }
             } else {
-                // Try force guess
                 const forced = findBestMatch(b.feature, systemMemory, Infinity);
-                // If the error is massive, it's probably noise.
-                // But if it's kinda close, it's a number.
-                
-                // CRITICAL FIX: If we aren't sure, mark as -1 (Blocked).
-                // Do not guess '0'. That causes math errors.
-                // Do not guess '5'. That causes math errors.
-                // Mark as Unknown.
-                
-                // Let's rely on forced guess but mark low confidence
                 gridData[b.gridR][b.gridC] = forced.label;
                 b.label = forced.label;
                 b.lowConf = true;
@@ -290,14 +305,13 @@
                         for(let i=r1; i<=r2; i++){
                             for(let j=c1; j<=c2; j++){
                                 let v = grid[i][j];
-                                if (v === -1) { blocked = true; break; } // UNKNOWN/BLOCKED
+                                if (v === -1) { blocked = true; break; } 
                                 sum+=v; 
                                 if(v>0) count++;
                             }
                             if(blocked) break;
                         }
                         
-                        // Valid move only if sum is 10 AND no blocked cells
                         if(!blocked && sum === 10 && count > 0) {
                             moves.push({
                                 r1, c1, r2, c2, count,
@@ -317,4 +331,218 @@
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // Draw Dynamic Grid Lin
+        // Grid lines
+        if(gridMetrics.maxX > 0) {
+            const tW = gridMetrics.maxX - gridMetrics.minX;
+            const tH = gridMetrics.maxY - gridMetrics.minY;
+            const stepX = tW / 9; 
+            const stepY = tH / 14;
+
+            ctx.strokeStyle = "rgba(0, 100, 255, 0.2)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let c=0; c<=COLS; c++) {
+                const lx = gridMetrics.minX + (c * stepX) - (stepX/2);
+                ctx.moveTo(lx, 0); ctx.lineTo(lx, cvs.height);
+            }
+            for(let r=0; r<=ROWS; r++) {
+                const ly = gridMetrics.minY + (r * stepY) - (stepY/2);
+                ctx.moveTo(0, ly); ctx.lineTo(cvs.width, ly);
+            }
+            ctx.stroke();
+        }
+
+        blobs.forEach(b => {
+            if (gridData[b.gridR][b.gridC] === 0) {
+                ctx.fillStyle = "rgba(0,0,0,1)";
+                ctx.fillRect(b.x-2, b.y-2, b.w+4, b.h+4);
+                return;
+            }
+            
+            if (gridData[b.gridR][b.gridC] === -1) {
+                 ctx.strokeStyle = "red";
+                 ctx.lineWidth = 2;
+                 ctx.strokeRect(b.x, b.y, b.w, b.h);
+                 return;
+            }
+
+            if(b.isGarbage || !b.label) return;
+
+            const labelX = b.x - 2;
+            const labelY = b.y - 12;
+            const size = 14;
+
+            ctx.fillStyle = b.lowConf ? "#ffd740" : "#69f0ae"; 
+            ctx.beginPath();
+            ctx.roundRect(labelX, labelY, size, size, 2);
+            ctx.fill();
+
+            ctx.font = "bold 11px Arial";
+            ctx.fillStyle = "black";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(b.label, labelX + size/2, labelY + size/2 + 1);
+        });
+
+        const btn = document.getElementById('solveBtn');
+        if(currentMove) {
+            btn.disabled = false;
+            btn.className = "btn active";
+            
+            let statusText = `Clears ${currentMove.count}`;
+            if(currentMove.predictedNext > 0) statusText += ` (+${currentMove.predictedNext} next)`;
+            
+            btn.innerHTML = `MOVE DONE<br><span style="font-size:0.6em; font-weight:normal">${statusText}</span>`;
+            document.getElementById('status').innerText = "Best Move Calculated.";
+
+            const tW = gridMetrics.maxX - gridMetrics.minX;
+            const tH = gridMetrics.maxY - gridMetrics.minY;
+            const stepX = tW / 9;
+            const stepY = tH / 14;
+            
+            const x1 = gridMetrics.minX + (currentMove.c1 * stepX) - (stepX/2);
+            const y1 = gridMetrics.minY + (currentMove.r1 * stepY) - (stepY/2);
+            const x2 = gridMetrics.minX + (currentMove.c2 * stepX) + (stepX/2); 
+            const y2 = gridMetrics.minY + (currentMove.r2 * stepY) + (stepY/2);
+            
+            const rectW = x2 - x1;
+            const rectH = y2 - y1;
+
+            const pad = 2;
+            ctx.strokeStyle = "#00e676"; 
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x1+pad, y1+pad, rectW-pad*2, rectH-pad*2);
+            ctx.fillStyle = "rgba(105, 240, 174, 0.25)";
+            ctx.fillRect(x1+pad, y1+pad, rectW-pad*2, rectH-pad*2);
+
+        } else {
+            btn.disabled = true;
+            btn.className = "btn";
+            btn.innerHTML = "NO MOVES";
+            document.getElementById('status').innerText = "Board cleared or stuck.";
+        }
+    }
+
+    function applyMove() {
+        if(!currentMove) return;
+        applyMoveToGrid(gridData, currentMove);
+        calculateStrategicMove();
+    }
+
+    // --- HELPERS ---
+    function detectBlobs(imgData, w, h, t) {
+        const d=imgData.data, v=new Uint8Array(w*h), res=[];
+        // Optimized loop: step by 2 to prevent freezing on 4k screens
+        for(let i=0; i<w*h; i+=2) {
+            if(v[i])continue;
+            if((d[i*4]+d[i*4+1]+d[i*4+2])/3 > t) {
+                let s=[i], minX=w, maxX=0, minY=h, maxY=0; v[i]=1;
+                while(s.length){
+                    const c=s.pop(), cx=c%w, cy=Math.floor(c/w);
+                    if(cx<minX)minX=cx; if(cx>maxX)maxX=cx; if(cy<minY)minY=cy; if(cy>maxY)maxY=cy;
+                    [c+1,c-1,c+w,c-w].forEach(n=>{
+                        if(n>=0 && n<w*h && !v[n] && (d[n*4]+d[n*4+1]+d[n*4+2])/3 > t){v[n]=1;s.push(n);}
+                    });
+                }
+                const width=maxX-minX+1, height=maxY-minY+1;
+                // Strict size filter
+                if(width>3 && height>6 && width<60 && height<60) res.push({x:minX, y:minY, w:width, h:height});
+            }
+        }
+        return res;
+    }
+
+    function extractFeature(ctx, b) {
+        const c=document.createElement('canvas'); c.width=NORM_SIZE; c.height=NORM_SIZE;
+        const x=c.getContext('2d'); x.drawImage(ctx.canvas,b.x,b.y,b.w,b.h,0,0,NORM_SIZE,NORM_SIZE);
+        const d=x.getImageData(0,0,NORM_SIZE,NORM_SIZE).data, a=[];
+        for(let i=0; i<d.length; i+=4) a.push(d[i]>100?1:0);
+        return a;
+    }
+
+    function findBestMatch(f, lib, maxErr=30) {
+        let best=null, min=Infinity;
+        lib.forEach(l=>{
+            let e=0; for(let i=0;i<256;i++)if(f[i]!==l.data[i])e++;
+            if(e<min){min=e; best=l;}
+        });
+        return min<=maxErr ? best : null;
+    }
+
+    function mapBlobsToGrid(blobs) {
+        let g=Array(ROWS).fill().map(()=>Array(COLS).fill(0));
+        if(!blobs.length) return g;
+        
+        // Outlier filtering: Sort blobs by X and Y to find core grid area
+        // This prevents scrollbars on the far right from stretching the grid
+        const xs = blobs.map(b=>b.x).sort((a,b)=>a-b);
+        const ys = blobs.map(b=>b.y).sort((a,b)=>a-b);
+        // Take 5th and 95th percentile to determine bounds
+        const qMinX = xs[Math.floor(xs.length*0.02)];
+        const qMaxX = xs[Math.floor(xs.length*0.98)] + 20; // +20 for blob width
+        const qMinY = ys[Math.floor(ys.length*0.02)];
+        const qMaxY = ys[Math.floor(ys.length*0.98)] + 20;
+
+        let minX=9999, maxX=0, minY=9999, maxY=0;
+        
+        // Refine bounds based on filtered list
+        blobs.forEach(b=>{
+            if(b.x >= qMinX && b.x <= qMaxX && b.y >= qMinY && b.y <= qMaxY) {
+                if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
+                if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;
+            }
+        });
+
+        gridMetrics = { minX, maxX, minY, maxY };
+
+        const tW=maxX-minX;
+        const tH=maxY-minY;
+        const stepX = tW / 9; 
+        const stepY = tH / 14;
+
+        blobs.forEach(b => {
+            if(b.x < minX || b.x > maxX || b.y < minY || b.y > maxY) {
+                b.gridR = null; return; // Ignore outliers
+            }
+
+            const cx = b.x + b.w/2;
+            const cy = b.y + b.h/2;
+            const c = Math.round((cx - minX) / stepX);
+            const r = Math.round((cy - minY) / stepY);
+            
+            if(c>=0 && c<COLS && r>=0 && r<ROWS) {
+                b.gridR=r; b.gridC=c; 
+            } else {
+                b.gridR=null; 
+            }
+        });
+        return g;
+    }
+
+    function cloneGrid(grid) { return grid.map(r => [...r]); }
+
+    function applyMoveToGrid(grid, move) {
+        for(let r=move.r1; r<=move.r2; r++) {
+            for(let c=move.c1; c<=move.c2; c++) {
+                grid[r][c] = 0;
+            }
+        }
+    }
+
+    function generateSystemMemory() {
+        for(let n in ASCII_DIGITS) {
+            const art=ASCII_DIGITS[n], f=new Array(256).fill(0);
+            for(let r=0;r<16;r++) for(let c=0;c<16;c++) {
+                const ar=Math.floor(r/(16/7)), ac=Math.floor(c/(16/5));
+                if(art[ar] && art[ar][ac]==='#') f[r*16+c]=1;
+            }
+            systemMemory.push({label:parseInt(n), data:f});
+        }
+    }
+
+    function resetMem() {
+        if(confirm("Clear memory?")) { localStorage.removeItem('sum10_pro_mem'); userMemory=[]; process(); }
+    }
+</script>
+</body>
+</html>
