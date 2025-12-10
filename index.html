@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Focus Solver (Clean View)</title>
+    <title>Sum-10 Focus Solver (High Contrast)</title>
     <style>
-        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --gold: #ffd700; --green: #00c853; }
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #40c4ff; --gold: #ffd740; --green: #69f0ae; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
         .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
@@ -20,17 +20,17 @@
         .status { font-weight: bold; margin-bottom: 15px; color: var(--accent); min-height: 1.2em; font-size: 0.9em; }
         
         .btn { width: 100%; padding: 20px; border: none; border-radius: 4px; font-weight: bold; font-size: 18px; cursor: pointer; background: #333; color: #777; transition: 0.1s; margin-top: 10px;}
-        .btn.active { background: var(--green); color: #000; box-shadow: 0 0 15px rgba(0, 200, 83, 0.4); animation: pulse 2s infinite; }
+        .btn.active { background: var(--green); color: #000; box-shadow: 0 0 15px rgba(105, 240, 174, 0.4); animation: pulse 2s infinite; }
         .btn:active { transform: translateY(2px); }
         .btn:disabled { opacity: 0.3; cursor: not-allowed; animation: none; }
 
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 200, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0); } }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(105, 240, 174, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(105, 240, 174, 0); } 100% { box-shadow: 0 0 0 0 rgba(105, 240, 174, 0); } }
 
         .slider-box { margin: 15px 0; padding: 10px; background: #2a2a2a; border-radius: 4px; border: 1px solid #333; }
         .slider-header { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
 
         .info-text { font-size: 0.8em; color: #aaa; margin-top: 20px; text-align: center; line-height: 1.5; }
-        .highlight { color: var(--gold); font-weight: bold; }
+        .highlight { color: var(--green); font-weight: bold; }
 
         /* Correction Tooltip */
         .tooltip { position: absolute; background: rgba(0,0,0,0.95); padding: 15px; border: 1px solid #fff; border-radius: 6px; pointer-events: none; display: none; transform: translate(-50%, -100%); margin-top: -15px; text-align: center; z-index: 100; box-shadow: 0 5px 15px black;}
@@ -40,7 +40,7 @@
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">Tokyo Yushun</h2>
+    <h2 style="color:var(--accent); margin-top:0;">takarazuka kinen</h2>
     
     <div class="layout">
         <div class="stage" id="stageContainer">
@@ -64,10 +64,10 @@
             <button id="solveBtn" class="btn" disabled onclick="applyMove()">MOVE DONE</button>
             
             <div class="info-text">
-                1. Perform the <span class="highlight">Green Highlighted</span> move.<br>
+                1. Perform the <span class="highlight">Green Boxed</span> move.<br>
                 2. Click <span class="highlight">MOVE DONE</span>.<br>
                 3. Repeat.<br><br>
-                <span style="color:#666; font-size:0.9em">(Click any small number to correct it)</span>
+                <span style="color:#888; font-size:0.9em">Click any <span style="background:#69f0ae; color:black; padding:0 2px; border-radius:2px;">#</span> tag to fix it.</span>
             </div>
             
             <div style="margin-top:20px; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
@@ -130,7 +130,12 @@
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
-        const clicked = blobs.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+        // Find clicked blob. 
+        // Expanded click area slightly to catch the new offset labels
+        const clicked = blobs.find(b => 
+            x >= b.x - 5 && x <= b.x + b.w + 5 && 
+            y >= b.y - 15 && y <= b.y + b.h + 5
+        );
 
         if(clicked) {
             correctionTarget = clicked;
@@ -255,27 +260,35 @@
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // 1. Draw Numbers (Small, Top-Left)
+        // 1. Draw Labels
         blobs.forEach(b => {
             if(b.isGarbage || !b.label) return;
             
-            // Draw thin bounding box for reference
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+            // Draw Bounding Box (Faint Dashed) to show what pixels are read
+            ctx.setLineDash([2, 2]);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
             ctx.lineWidth = 1;
             ctx.strokeRect(b.x, b.y, b.w, b.h);
+            ctx.setLineDash([]);
 
-            // Draw Number small in corner
-            ctx.font = "bold 12px monospace";
-            ctx.textBaseline = "top";
-            ctx.textAlign = "left";
-            
-            // Text shadow for contrast
+            // Draw "Sticker" Label
+            // Offset it slightly Up and Left so it doesn't cover the number
+            const labelX = b.x - 2;
+            const labelY = b.y - 12;
+            const size = 14;
+
+            // Sticker Background
+            ctx.fillStyle = b.lowConf ? "#ffd740" : "#69f0ae"; // Yellow or Green
+            ctx.beginPath();
+            ctx.roundRect(labelX, labelY, size, size, 2);
+            ctx.fill();
+
+            // Text
+            ctx.font = "bold 11px Arial";
             ctx.fillStyle = "black";
-            ctx.fillText(b.label, b.x + 1, b.y + 1);
-            
-            // Foreground color
-            ctx.fillStyle = b.lowConf ? "#ffff00" : "#00e676";
-            ctx.fillText(b.label, b.x, b.y);
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(b.label, labelX + size/2, labelY + size/2 + 1);
         });
 
         // 2. Draw Best Move
@@ -300,10 +313,11 @@
 
             if(found) {
                 const pad = 6;
-                ctx.strokeStyle = "#00e676";
-                ctx.lineWidth = 5;
+                ctx.strokeStyle = "#69f0ae"; 
+                ctx.lineWidth = 4;
                 ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
-                ctx.fillStyle = "rgba(0, 230, 118, 0.2)";
+                
+                ctx.fillStyle = "rgba(105, 240, 174, 0.25)";
                 ctx.fillRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
             }
         } else {
