@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Safety Solver</title>
+    <title>Japan Cup</title>
     <style>
         :root { --bg: #121212; --panel: #1e1e1e; --accent: #2979ff; --gold: #ffd740; --green: #00e676; --error: #ff1744; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; height: 100vh; margin: 0; }
@@ -43,7 +43,6 @@
         .slider-header { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
 
         .info-text { font-size: 0.8em; color: #aaa; margin-top: 20px; text-align: center; line-height: 1.5; }
-        .highlight { color: var(--green); font-weight: bold; }
         .warning { color: var(--error); font-weight: bold; }
 
         .tooltip { position: absolute; background: rgba(0,0,0,0.95); padding: 15px; border: 1px solid #fff; border-radius: 6px; pointer-events: none; display: none; transform: translate(-50%, -100%); margin-top: -15px; text-align: center; z-index: 100; box-shadow: 0 5px 15px black;}
@@ -52,7 +51,7 @@
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">QEII Cup</h2>
+    <h2 style="color:var(--accent); margin-top:0;">Japan Cup</h2>
     
     <div class="layout">
         <div class="stage" id="stageContainer" tabindex="0">
@@ -61,7 +60,7 @@
             <canvas id="overlayCanvas"></canvas>
             <div id="correctionTooltip" class="tooltip">
                 <canvas id="tooltipCanvas" class="tooltip-img"></canvas>
-                <div>Type Correct Number</div>
+                <div>Type Number (1-9)</div>
             </div>
         </div>
 
@@ -76,9 +75,10 @@
             <button id="solveBtn" class="btn" disabled onclick="applyMove()">MOVE DONE</button>
             
             <div class="info-text">
-                <span class="warning">Red Box = BLOCKED</span><br>
-                This happens if a number is too dim or unknown.<br>
-                <b>Click Red Boxes to fix them</b>, otherwise the solver works around them.
+                <span class="warning">RED BOX = BLOCKED</span><br>
+                This square has pixels but no number was read.<br>
+                The solver will <b>NOT</b> use it.<br><br>
+                <b>Click Red Boxes to fix them manually.</b>
             </div>
             
             <div style="margin-top:auto; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
@@ -138,11 +138,11 @@
 
     const stage = document.getElementById('stageContainer');
     const tooltip = document.getElementById('correctionTooltip');
-    let correctionTarget = null; 
     let correctionGridPos = null;
 
     stage.addEventListener('click', () => stage.focus());
 
+    // --- CLICK TO FIX LOGIC ---
     stage.addEventListener('mousedown', e => {
         if(!srcImg || gridMetrics.maxX === 0) return;
         const rect = stage.getBoundingClientRect();
@@ -161,15 +161,15 @@
         if(c>=0 && c<COLS && r>=0 && r<ROWS) {
             correctionGridPos = { r, c };
             
-            // Visual feedback
             tooltip.style.display = 'block';
             tooltip.style.left = x + 'px';
             tooltip.style.top = y + 'px';
             
-            // Try to find a blob visual for context, or just show text
+            // Try to show preview
             const b = blobs.find(b => b.gridR === r && b.gridC === c);
+            const tc = document.getElementById('tooltipCanvas');
+            
             if(b) {
-                const tc = document.getElementById('tooltipCanvas');
                 tc.width = NORM_SIZE; tc.height = NORM_SIZE;
                 const tctx = tc.getContext('2d');
                 const img = tctx.createImageData(NORM_SIZE, NORM_SIZE);
@@ -178,12 +178,8 @@
                     img.data[i*4]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255;
                 }
                 tctx.putImageData(img,0,0);
-                correctionTarget = b;
             } else {
-                // Clicking an empty/ghost spot
-                correctionTarget = null;
-                const tc = document.getElementById('tooltipCanvas');
-                tc.width=1; tc.height=1; // hide canvas
+                tc.width=1; tc.height=1; // Hide canvas if no blob data
             }
             e.stopPropagation();
         } else {
@@ -194,20 +190,36 @@
     window.addEventListener('keydown', e => {
         if(correctionGridPos && e.key >= '0' && e.key <= '9') {
             const num = parseInt(e.key);
+            const {r, c} = correctionGridPos;
+
+            // Update Grid Data Directly
+            gridData[r][c] = num;
             
-            // If there's a blob, learn it. If not, just force grid data.
-            if(correctionTarget) {
-                userMemory.push({ label: num, data: correctionTarget.feature });
+            // If there was a blob there, learn it for future
+            const b = blobs.find(b => b.gridR === r && b.gridC === c);
+            if(b) {
+                b.label = num;
+                b.isGarbage = false;
+                userMemory.push({ label: num, data: b.feature });
                 localStorage.setItem('sum10_pro_mem', JSON.stringify(userMemory));
+            } else {
+                // If no blob was detected (Ghost), we can't learn pixel data, 
+                // but we CAN update the grid for this specific run.
+                // We fake a blob entry so it draws on the screen
+                const cx = gridMetrics.minX + (c * (gridMetrics.maxX-gridMetrics.minX)/9);
+                const cy = gridMetrics.minY + (r * (gridMetrics.maxY-gridMetrics.minY)/14);
+                blobs.push({
+                     x: cx-10, y: cy-10, w: 20, h: 20,
+                     gridR: r, gridC: c,
+                     label: num,
+                     lowConf: false
+                });
             }
             
-            // Force the value into the grid logic (overriding auto-detect)
-            // We use a temporary override or just re-process. 
-            // Since we can't easily inject into process() loop without blob,
-            // We will let the user fix blobs, but for "ghosts", we just rely on future teaching?
-            // Actually, best is to just re-process.
             tooltip.style.display = 'none';
-            process(); 
+            // Recalculate move without re-processing image
+            calculateStrategicMove();
+            drawScene();
         }
     });
 
@@ -232,7 +244,7 @@
         // 1. Detect
         blobs = detectBlobs(raw, cvs.width, cvs.height, thresh);
         
-        // 2. Map & Setup Grid
+        // 2. Map
         gridData = mapBlobsToGrid(blobs);
 
         // 3. Recognize
@@ -253,17 +265,19 @@
                 }
             } else {
                 const forced = findBestMatch(b.feature, systemMemory, Infinity);
+                // Force a label, but mark as low confidence.
+                // IMPORTANT: If we are wrong here, user can click to fix.
                 gridData[b.gridR][b.gridC] = forced.label;
                 b.label = forced.label;
                 b.lowConf = true;
             }
         });
 
-        // 4. GHOST DETECTION (The Safety Fix)
-        // Check grid spots that are '0' (Empty). If they have pixels, mark -1 (Blocked).
+        // 4. GHOST DETECTION (Aggressive Safety)
         detectGhosts(ctx, thresh);
 
         calculateStrategicMove();
+        drawScene();
     }
 
     // --- GHOST DETECTOR ---
@@ -278,14 +292,15 @@
         for(let r=0; r<ROWS; r++) {
             for(let c=0; c<COLS; c++) {
                 if(gridData[r][c] === 0) {
-                    // It says empty. Let's verify.
-                    // Calculate center of this cell
+                    // It says empty. Scan for noise.
                     const cx = gridMetrics.minX + (c * stepX);
                     const cy = gridMetrics.minY + (r * stepY);
                     
-                    // Sample a small 10x10 box in center
-                    const s = 10;
-                    const sample = ctx.getImageData(cx - s/2, cy - s/2, s, s).data;
+                    // Sample center 10x10
+                    // Guard against out of bounds
+                    if(cx<0 || cx>ctx.canvas.width || cy<0 || cy>ctx.canvas.height) continue;
+
+                    const sample = ctx.getImageData(cx - 5, cy - 5, 10, 10).data;
                     let brightPixels = 0;
                     
                     for(let i=0; i<sample.length; i+=4) {
@@ -293,10 +308,10 @@
                         if(b > thresh) brightPixels++;
                     }
 
-                    // If we see more than a few bright pixels, but no blob was mapped...
-                    // It's a GHOST (Unread number).
-                    if(brightPixels > 5) {
-                        gridData[r][c] = -1; // BLOCK IT
+                    // If noise found, it's a number we missed or a bucket rim.
+                    // MARK AS BLOCKED (-1).
+                    if(brightPixels > 2) {
+                        gridData[r][c] = -1; 
                     }
                 }
             }
@@ -309,7 +324,6 @@
         
         if (currentMoves.length === 0) {
             currentMove = null;
-            drawScene();
             return;
         }
 
@@ -335,7 +349,6 @@
         }
 
         currentMove = bestStrategy;
-        drawScene();
     }
 
     function getAllMoves(grid) {
@@ -350,6 +363,7 @@
                         for(let i=r1; i<=r2; i++){
                             for(let j=c1; j<=c2; j++){
                                 let v = grid[i][j];
+                                // Strict: -1 breaks line. 0 allows line but adds 0 to sum.
                                 if (v === -1) { blocked = true; break; } 
                                 sum+=v; 
                                 if(v>0) count++;
@@ -357,7 +371,7 @@
                             if(blocked) break;
                         }
                         
-                        // Strict check: Sum=10, No Blocks, Count > 1 (can't match single number)
+                        // Strict check: Sum=10, No Blocks, Count > 1
                         if(!blocked && sum === 10 && count > 1) {
                             moves.push({
                                 r1, c1, r2, c2, count,
@@ -377,57 +391,64 @@
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // Calculate Steps for Drawing
-        let stepX=0, stepY=0;
+        // Draw State of Grid
         if(gridMetrics.maxX > 0) {
             const tW = gridMetrics.maxX - gridMetrics.minX;
             const tH = gridMetrics.maxY - gridMetrics.minY;
-            stepX = tW / 9; 
-            stepY = tH / 14;
-        }
+            const stepX = tW / 9; 
+            const stepY = tH / 14;
 
-        // Draw Cell Statuses
-        for(let r=0; r<ROWS; r++) {
-            for(let c=0; c<COLS; c++) {
-                const val = gridData[r][c];
-                
-                // Calculate position for drawing non-blob cells (Ghosts/Blackouts)
-                const cx = gridMetrics.minX + (c * stepX);
-                const cy = gridMetrics.minY + (r * stepY);
-                const boxS = stepX * 0.6; 
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    const val = gridData[r][c];
+                    const cx = gridMetrics.minX + (c * stepX);
+                    const cy = gridMetrics.minY + (r * stepY);
+                    const boxS = stepX * 0.8; 
 
-                if (val === 0) {
-                    // Confirmed Empty - Draw Blackout
-                    ctx.fillStyle = "rgba(0,0,0,0.85)";
-                    ctx.fillRect(cx - boxS/2, cy - boxS/2, boxS, boxS);
-                } else if (val === -1) {
-                    // Blocked/Ghost - Draw Red Box
-                    ctx.strokeStyle = "red";
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(cx - boxS/2, cy - boxS/2, boxS, boxS);
+                    if (val === 0) {
+                        // Empty/Cleared
+                        ctx.fillStyle = "rgba(0,0,0,0.8)";
+                        ctx.fillRect(cx - boxS/2, cy - boxS/2, boxS, boxS);
+                    } else if (val === -1) {
+                        // BLOCKED
+                        ctx.strokeStyle = "red";
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(cx - boxS/2, cy - boxS/2, boxS, boxS);
+                        
+                        // Cross
+                        ctx.beginPath();
+                        ctx.moveTo(cx - boxS/2, cy - boxS/2);
+                        ctx.lineTo(cx + boxS/2, cy + boxS/2);
+                        ctx.moveTo(cx + boxS/2, cy - boxS/2);
+                        ctx.lineTo(cx - boxS/2, cy + boxS/2);
+                        ctx.stroke();
+                    } else {
+                        // Valid Number - Draw Sticker
+                        // If we have a blob object, use its coords, else use grid coords
+                        let bx=cx-10, by=cy-10;
+                        const b = blobs.find(b=>b.gridR===r && b.gridC===c);
+                        if(b) { bx=b.x; by=b.y; }
+
+                        const labelX = bx - 2;
+                        const labelY = by - 12;
+                        const size = 14;
+
+                        // Check confidence: if it was low conf but user hasn't fixed it, show yellow
+                        // If user fixed it, it's green.
+                        ctx.fillStyle = (b && b.lowConf) ? "#ffd740" : "#69f0ae"; 
+                        ctx.beginPath();
+                        ctx.roundRect(labelX, labelY, size, size, 2);
+                        ctx.fill();
+
+                        ctx.font = "bold 11px Arial";
+                        ctx.fillStyle = "black";
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        ctx.fillText(val, labelX + size/2, labelY + size/2 + 1);
+                    }
                 }
             }
         }
-
-        // Draw Blobs (Detected Numbers)
-        blobs.forEach(b => {
-            if(gridData[b.gridR][b.gridC] <= 0) return; // Skip if blocked or empty
-
-            const labelX = b.x - 2;
-            const labelY = b.y - 12;
-            const size = 14;
-
-            ctx.fillStyle = b.lowConf ? "#ffd740" : "#69f0ae"; 
-            ctx.beginPath();
-            ctx.roundRect(labelX, labelY, size, size, 2);
-            ctx.fill();
-
-            ctx.font = "bold 11px Arial";
-            ctx.fillStyle = "black";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(b.label, labelX + size/2, labelY + size/2 + 1);
-        });
 
         const btn = document.getElementById('solveBtn');
         if(currentMove) {
@@ -439,6 +460,12 @@
             
             btn.innerHTML = `MOVE DONE<br><span style="font-size:0.6em; font-weight:normal">${statusText}</span>`;
             document.getElementById('status').innerText = "Best Move Calculated.";
+
+            // Draw Highlight
+            const tW = gridMetrics.maxX - gridMetrics.minX;
+            const tH = gridMetrics.maxY - gridMetrics.minY;
+            const stepX = tW / 9; 
+            const stepY = tH / 14;
 
             const x1 = gridMetrics.minX + (currentMove.c1 * stepX) - (stepX/2);
             const y1 = gridMetrics.minY + (currentMove.r1 * stepY) - (stepY/2);
@@ -467,6 +494,7 @@
         if(!currentMove) return;
         applyMoveToGrid(gridData, currentMove);
         calculateStrategicMove();
+        drawScene();
     }
 
     // --- HELPERS ---
