@@ -3,96 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bucket Match Solver</title>
+    <title>Sum-10 Adaptive Solver</title>
     <style>
-        body { font-family: 'Courier New', monospace; background: #222; color: #ddd; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        body { background: #1a1a1a; color: #ddd; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
-        .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+        .layout { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
         
-        /* The Visuals */
-        .stage { position: relative; border: 4px solid #444; }
-        canvas { display: block; image-rendering: pixelated; } /* Crucial for pixel art */
+        /* The Stage */
+        .stage { position: relative; border: 2px solid #555; background: #000; }
+        canvas { display: block; }
         #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
-
+        
         /* Controls */
-        .panel { width: 300px; background: #333; padding: 20px; border-radius: 8px; }
+        .panel { width: 320px; background: #2d2d2d; padding: 20px; border-radius: 8px; }
         
-        .status { color: #ffeb3b; min-height: 1.5em; margin-bottom: 10px; font-weight: bold; }
+        .status { color: #ffeb3b; font-weight: bold; margin-bottom: 10px; min-height: 1.2em; }
         
-        .btn { width: 100%; padding: 15px; background: #555; border: none; color: white; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        .btn.active { background: #00e676; color: black; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn { width: 100%; padding: 12px; margin-top: 10px; border: none; font-weight: bold; cursor: pointer; color: white; background: #444; }
+        .btn.primary { background: #007bff; }
+        .btn.primary:hover { background: #0056b3; }
+        .btn:disabled { opacity: 0.5; cursor: default; }
 
-        /* The "Brain" View - Shows user what the PC sees */
-        .brain-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 1px; background: #000; margin-top: 20px; border: 1px solid #555; }
-        .brain-cell { width: 100%; aspect-ratio: 1; background: #222; display: flex; justify-content: center; align-items: center; font-size: 10px; color: #888; position: relative; }
-        .brain-cell canvas { width: 80%; height: 80%; image-rendering: pixelated; }
-
-        /* Modal */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 100; }
-        .modal-box { background: #222; padding: 30px; border: 2px solid #555; text-align: center; }
-        .train-img { width: 64px; height: 64px; border: 1px solid #777; margin: 15px; image-rendering: pixelated; }
-        .train-input { font-size: 30px; width: 60px; text-align: center; background: #000; color: white; border: 1px solid #555; }
-
-        .slider-label { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-top: 15px;}
+        .slider-box { margin: 15px 0; padding: 10px; background: #222; border-radius: 4px; border: 1px solid #444; }
+        .slider-label { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
+        
+        /* Training Modal */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 999; }
+        .modal-content { background: #333; padding: 30px; border-radius: 8px; text-align: center; border: 1px solid #666; }
+        .train-img { width: 60px; height: 60px; image-rendering: pixelated; border: 2px solid #fff; margin: 15px; }
+        .train-input { font-size: 24px; width: 60px; text-align: center; background: #000; color: #fff; border: 1px solid #555; }
     </style>
 </head>
 <body>
 
-    <h2>minigame</h2>
-    <div style="margin-bottom:10px; color:#aaa; font-size:0.9em;">
-        1. Paste Image (Ctrl+V). Crop tightly to the grid if possible.<br>
-        2. If numbers aren't visible in "Computer Vision" below, adjust Brightness Slider.
+    <h2>doro</h2>
+    <div style="font-size:0.85em; color:#888; margin-bottom:15px; text-align:center;">
+        Works with off-center screenshots & borders.<br>
+        1. Paste Image &nbsp;|&nbsp; 2. Adjust slider until ONLY numbers are white &nbsp;|&nbsp; 3. Teach & Solve
     </div>
 
-    <div class="container">
-        <!-- Main Image -->
+    <div class="layout">
+        <!-- Main Display -->
         <div class="stage">
-            <canvas id="imgCanvas"></canvas>
+            <canvas id="mainCanvas"></canvas>
             <canvas id="overlayCanvas"></canvas>
         </div>
 
         <!-- Controls -->
         <div class="panel">
-            <div id="status" class="status">Waiting for image...</div>
-            
-            <button id="solveBtn" class="btn" disabled onclick="confirmMove()">SOLVE</button>
+            <div id="status" class="status">Paste screenshot to begin...</div>
 
-            <div class="slider-label"><span>Brightness Filter</span> <span id="threshVal">160</span></div>
-            <input type="range" id="threshSlider" min="100" max="250" value="160" style="width:100%" oninput="reprocess()">
-            
-            <div style="margin-top:20px; border-top:1px solid #555; padding-top:10px;">
-                <small>Computer Vision Preview:</small>
-                <div id="brainGrid" class="brain-grid"></div>
+            <!-- View Toggle -->
+            <div style="font-size:0.8em; margin-bottom:5px;">Preview Mode:</div>
+            <select id="viewMode" style="width:100%; padding:5px; background:#444; color:white; border:none;" onchange="updateView()">
+                <option value="original">Original Image</option>
+                <option value="threshold">Computer Vision (Contrast)</option>
+            </select>
+
+            <div class="slider-box">
+                <div class="slider-label"><span>Sensitivity (Threshold)</span> <span id="threshVal">200</span></div>
+                <input type="range" id="threshold" min="100" max="250" value="200" style="width:100%" oninput="processImage()">
+                <div style="font-size:0.7em; color:#777; margin-top:5px;">Slide RIGHT to remove bucket rims.<br>Slide LEFT if numbers disappear.</div>
             </div>
-            
-            <button style="margin-top:20px; font-size:12px; padding:5px; background:none;" onclick="resetMem()">[ Reset Memory ]</button>
+
+            <button id="solveBtn" class="btn primary" disabled onclick="confirmMove()">SOLVE BOARD</button>
+            <button class="btn" onclick="resetMemory()" style="margin-top:20px; font-size:0.8em; background:none;">[ Reset Learned Numbers ]</button>
         </div>
     </div>
 
-    <!-- Training Modal -->
+    <!-- Modal -->
     <div id="trainModal" class="modal">
-        <div class="modal-box">
-            <h3>Teach me this number</h3>
+        <div class="modal-content">
+            <h3>New Shape Detected</h3>
+            <p style="color:#aaa; font-size:0.8em;">Type the number seen below</p>
             <canvas id="trainCanvas" class="train-img"></canvas>
             <br>
             <input type="number" id="trainInput" class="train-input" min="0" max="9">
             <br><br>
-            <button class="btn active" style="padding:10px;" onclick="saveTraining()">SAVE</button>
+            <button class="btn primary" onclick="saveTraining()">Save</button>
         </div>
     </div>
 
 <script>
+    // --- SETTINGS ---
     const ROWS = 15;
     const COLS = 10;
-    const TEMPLATE_SIZE = 20; // We normalize all numbers to 20x20 pixels
+    const NORM_SIZE = 16; // Normalize numbers to 16x16px
     
-    let srcImage = null;
+    // --- STATE ---
+    let srcImg = null;
     let gridData = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-    let cellFeatures = []; // Stores the pixel data for each cell
-    let templates = JSON.parse(localStorage.getItem('bucket_templates_v2')) || [];
+    let detectedBlobs = [];
     let trainingQueue = [];
-    let currentBest = null;
+    let memory = JSON.parse(localStorage.getItem('sum10_memory')) || [];
+    let currentBestMove = null;
 
     // --- PASTE HANDLER ---
     window.addEventListener('paste', e => {
@@ -102,236 +106,248 @@
                 const blob = item.getAsFile();
                 const img = new Image();
                 img.src = URL.createObjectURL(blob);
-                img.onload = () => { srcImage = img; reprocess(); };
+                img.onload = () => { srcImg = img; processImage(); };
             }
         }
     });
 
-    function reprocess() {
-        if(!srcImage) return;
-
-        const thresh = parseInt(document.getElementById('threshSlider').value);
+    // --- MAIN PIPELINE ---
+    function processImage() {
+        if(!srcImg) return;
+        
+        const thresh = parseInt(document.getElementById('threshold').value);
         document.getElementById('threshVal').innerText = thresh;
 
-        // 1. Setup Canvas
-        const canvas = document.getElementById('imgCanvas');
-        const overlay = document.getElementById('overlayCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = srcImage.width; canvas.height = srcImage.height;
-        overlay.width = srcImage.width; overlay.height = srcImage.height;
-        ctx.drawImage(srcImage, 0, 0);
+        const cvs = document.getElementById('mainCanvas');
+        const ctx = cvs.getContext('2d');
+        const ovl = document.getElementById('overlayCanvas');
+        
+        // Resize
+        cvs.width = srcImg.width; cvs.height = srcImg.height;
+        ovl.width = srcImg.width; ovl.height = srcImg.height;
 
-        // 2. Grid Slicing
-        const cellW = canvas.width / COLS;
-        const cellH = canvas.height / ROWS;
-        const brainGrid = document.getElementById('brainGrid');
-        brainGrid.innerHTML = '';
-        cellFeatures = [];
+        // Draw Original
+        ctx.drawImage(srcImg, 0, 0);
 
-        // 3. Process Each Cell
-        for(let r=0; r<ROWS; r++) {
-            for(let c=0; c<COLS; c++) {
-                
-                // Extract Cell (Center 60% to avoid bucket edges)
-                const padX = cellW * 0.2;
-                const padY = cellH * 0.2; // Numbers are usually top/center aligned in bucket, but safe to crop center
-                
-                // Get raw pixels of the cell
-                const imgData = ctx.getImageData(
-                    (c*cellW) + padX, (r*cellH) + padY, 
-                    cellW - (padX*2), cellH - (padY*2)
-                );
-                
-                // Process: Threshold -> Center -> Normalize
-                const featureCanvas = processCellToFeature(imgData, thresh);
-                
-                // Add to visual debug
-                const div = document.createElement('div');
-                div.className = 'brain-cell';
-                div.id = `brain-${r}-${c}`;
-                // Append the processed canvas so user sees what PC sees
-                const debugCanv = document.createElement('canvas');
-                debugCanv.width = TEMPLATE_SIZE; debugCanv.height = TEMPLATE_SIZE;
-                debugCanv.getContext('2d').drawImage(featureCanvas, 0, 0);
-                div.appendChild(debugCanv);
-                brainGrid.appendChild(div);
+        // 1. Detect Blobs (The Numbers)
+        const imgData = ctx.getImageData(0, 0, cvs.width, cvs.height);
+        const blobs = findBlobs(imgData, thresh);
 
-                // Store for matching
-                cellFeatures.push({ r, c, canvas: featureCanvas });
-            }
-        }
+        // 2. Map Blobs to Grid (Auto-Alignment)
+        detectedBlobs = mapBlobsToGrid(blobs, cvs.width, cvs.height);
 
-        // 4. Identify Numbers
+        // 3. Identification (Pattern Matching)
         trainingQueue = [];
         gridData = Array(ROWS).fill().map(() => Array(COLS).fill(0));
 
-        cellFeatures.forEach(item => {
-            const match = findMatch(item.canvas);
-            if (match) {
-                gridData[item.r][item.c] = match.label;
-                // Show recognized number in debug grid
-                const label = document.createElement('span');
-                label.innerText = match.label;
-                label.style.cssText = "position:absolute; bottom:0; right:0; color:#0f0; font-weight:bold; background:rgba(0,0,0,0.7);";
-                document.getElementById(`brain-${item.r}-${item.c}`).appendChild(label);
+        detectedBlobs.forEach(b => {
+            // Extract normalized feature (16x16 pixel array)
+            const feature = extractFeature(ctx, b);
+            
+            // Compare against memory
+            const match = findBestMatch(feature);
+            
+            if(match) {
+                gridData[b.r][b.c] = match.label;
+                b.label = match.label; // For debug drawing
             } else {
-                // Check if it's empty (black)
-                if(!isEmpty(item.canvas)) {
-                    trainingQueue.push(item);
-                }
+                trainingQueue.push({ blob: b, feature: feature });
             }
         });
 
-        if(trainingQueue.length > 0) {
+        // Update View
+        updateView();
+
+        // Status Update
+        if(detectedBlobs.length < 5) {
+            document.getElementById('status').innerText = "⚠️ No numbers found. Adjust Sensitivity!";
+            document.getElementById('solveBtn').disabled = true;
+        } else if(trainingQueue.length > 0) {
+            document.getElementById('status').innerText = `Found ${detectedBlobs.length} items. ${trainingQueue.length} unknown.`;
             startTraining();
         } else {
+            document.getElementById('status').innerText = `Grid recognized. Ready to solve.`;
             solve();
         }
     }
 
-    // --- THE CORE LOGIC: IMAGE NORMALIZATION ---
-    function processCellToFeature(imgData, threshold) {
-        // 1. Thresholding (Turn pixels Black or White)
+    // --- STEP 1: BLOB DETECTION (FLOOD FILL) ---
+    function findBlobs(imgData, threshold) {
         const w = imgData.width;
         const h = imgData.height;
         const d = imgData.data;
-        
-        let minX = w, maxX = 0, minY = h, maxY = 0;
-        let hasPixels = false;
+        const visited = new Uint8Array(w * h);
+        const blobs = [];
 
-        // Find bounding box of WHITE pixels
-        for(let i=0; i<d.length; i+=4) {
-            const bright = (d[i] + d[i+1] + d[i+2]) / 3;
+        // Scan pixels
+        for(let i=0; i<w*h; i++) {
+            if(visited[i]) continue;
+            
+            // Check Brightness (RGB average)
+            const r=d[i*4], g=d[i*4+1], b=d[i*4+2];
+            const bright = (r+g+b)/3;
+
             if(bright > threshold) {
-                const idx = i/4;
-                const x = idx % w;
-                const y = Math.floor(idx / w);
-                
-                if(x < minX) minX = x;
-                if(x > maxX) maxX = x;
-                if(y < minY) minY = y;
-                if(y > maxY) maxY = y;
-                hasPixels = true;
-            }
-        }
+                // Found a bright pixel! Flood fill to find the whole shape.
+                let stack = [i];
+                visited[i] = 1;
+                let minX=w, maxX=0, minY=h, maxY=0;
+                let pixelCount = 0;
 
-        // Create normalized 20x20 canvas
-        const out = document.createElement('canvas');
-        out.width = TEMPLATE_SIZE; out.height = TEMPLATE_SIZE;
-        const ctx = out.getContext('2d');
-        ctx.fillStyle = "black";
-        ctx.fillRect(0,0,TEMPLATE_SIZE,TEMPLATE_SIZE);
+                while(stack.length) {
+                    const curr = stack.pop();
+                    const cx = curr % w;
+                    const cy = Math.floor(curr / w);
+                    
+                    if(cx < minX) minX = cx;
+                    if(cx > maxX) maxX = cx;
+                    if(cy < minY) minY = cy;
+                    if(cy > maxY) maxY = cy;
+                    pixelCount++;
 
-        if(!hasPixels) return out; // Return empty black square
+                    // Check 4 neighbors
+                    const neighbors = [curr+1, curr-1, curr+w, curr-w];
+                    for(let n of neighbors) {
+                        if(n>=0 && n<w*h && !visited[n]) {
+                            const nr=d[n*4], ng=d[n*4+1], nb=d[n*4+2];
+                            if((nr+ng+nb)/3 > threshold) {
+                                visited[n] = 1;
+                                stack.push(n);
+                            }
+                        }
+                    }
+                }
 
-        // 2. Draw the cut-out number into the center of the 20x20 square
-        // We assume the pixel art number isn't larger than 20x20
-        const contentW = maxX - minX + 1;
-        const contentH = maxY - minY + 1;
-
-        // Calculate offset to center it
-        const offX = Math.floor((TEMPLATE_SIZE - contentW) / 2);
-        const offY = Math.floor((TEMPLATE_SIZE - contentH) / 2);
-
-        // Create a temp canvas for the cropped content
-        const temp = document.createElement('canvas');
-        temp.width = w; temp.height = h;
-        const tCtx = temp.getContext('2d');
-        tCtx.putImageData(imgData, 0, 0);
-
-        // Draw just the white part into the center of the output
-        ctx.drawImage(temp, minX, minY, contentW, contentH, offX, offY, contentW, contentH);
-        
-        // Final Threshold pass to ensure clean B&W lines (removes anti-aliasing gray)
-        const finalData = ctx.getImageData(0,0,TEMPLATE_SIZE,TEMPLATE_SIZE);
-        for(let i=0; i<finalData.data.length; i+=4) {
-            const val = finalData.data[i];
-            const bin = val > 50 ? 255 : 0; // Strict binary
-            finalData.data[i] = bin;
-            finalData.data[i+1] = bin;
-            finalData.data[i+2] = bin;
-        }
-        ctx.putImageData(finalData, 0, 0);
-
-        return out;
-    }
-
-    function isEmpty(canvas) {
-        const d = canvas.getContext('2d').getImageData(0,0,TEMPLATE_SIZE,TEMPLATE_SIZE).data;
-        for(let i=0; i<d.length; i+=4) {
-            if(d[i] > 128) return false;
-        }
-        return true;
-    }
-
-    // --- MATCHING ---
-    function findMatch(inputCanvas) {
-        if(templates.length === 0) return null;
-        
-        const inputData = inputCanvas.getContext('2d').getImageData(0,0,TEMPLATE_SIZE,TEMPLATE_SIZE).data;
-        
-        for(let t of templates) {
-            // Compare pixel by pixel
-            let diff = 0;
-            for(let i=0; i<inputData.length; i+=4) {
-                // If pixel mismatch (one is white, one is black)
-                if(inputData[i] !== t.data[i]) {
-                    diff++;
+                // Filter Noise: Must be big enough to be a number
+                const width = maxX - minX + 1;
+                const height = maxY - minY + 1;
+                if(width > 4 && height > 8 && pixelCount > 15) {
+                    blobs.push({ x: minX, y: minY, w: width, h: height });
                 }
             }
-            
-            // Allow very slight error (pixel flicker)
-            if(diff < 10) return t; // 10 pixels different max
         }
+        return blobs;
+    }
+
+    // --- STEP 2: AUTO-GRID MAPPING ---
+    function mapBlobsToGrid(blobs, imgW, imgH) {
+        if(blobs.length === 0) return [];
+
+        // 1. Find the bounding box of the entire grid content
+        let gridMinX = Math.min(...blobs.map(b => b.x));
+        let gridMaxX = Math.max(...blobs.map(b => b.x + b.w));
+        let gridMinY = Math.min(...blobs.map(b => b.y));
+        let gridMaxY = Math.max(...blobs.map(b => b.y + b.h));
+
+        // 2. Estimate Cell Size
+        const totalW = gridMaxX - gridMinX;
+        const totalH = gridMaxY - gridMinY;
+        
+        // We assume the blobs detected span roughly the whole 10x15 grid
+        // The average spacing is TotalWidth / 9 (since 10 items have 9 gaps)
+        const avgCellW = totalW / 9.5; // Divide by slightly less than 10 to account for width of char
+        const avgCellH = totalH / 14.5;
+
+        // 3. Assign row/col to each blob based on relative position
+        const mapped = [];
+        blobs.forEach(b => {
+            const centerX = b.x + b.w/2;
+            const centerY = b.y + b.h/2;
+            
+            // Calculate index
+            let c = Math.round((centerX - gridMinX) / (totalW / 9)); 
+            let r = Math.round((centerY - gridMinY) / (totalH / 14));
+
+            // Clamp to grid size
+            if(c >= 0 && c < COLS && r >= 0 && r < ROWS) {
+                b.r = r;
+                b.c = c;
+                mapped.push(b);
+            }
+        });
+        return mapped;
+    }
+
+    // --- STEP 3: FEATURE EXTRACTION (Normalize) ---
+    function extractFeature(ctx, blob) {
+        // Create 16x16 canvas
+        const tC = document.createElement('canvas');
+        tC.width = NORM_SIZE; tC.height = NORM_SIZE;
+        const tCtx = tC.getContext('2d');
+        
+        // Draw the blob, stretched to fit 16x16
+        // This removes size differences (small '1' vs big '1')
+        tCtx.drawImage(ctx.canvas, blob.x, blob.y, blob.w, blob.h, 0, 0, NORM_SIZE, NORM_SIZE);
+        
+        // Convert to simple binary array (0 or 1)
+        const d = tCtx.getImageData(0,0,NORM_SIZE,NORM_SIZE).data;
+        const features = [];
+        for(let i=0; i<d.length; i+=4) {
+            // Since source was already thresholded mostly, just take R channel
+            features.push(d[i] > 100 ? 1 : 0);
+        }
+        return { data: features, debugCanvas: tC };
+    }
+
+    function findBestMatch(feature) {
+        if(memory.length === 0) return null;
+        
+        let best = null;
+        let minDiff = 9999;
+        
+        memory.forEach(mem => {
+            // Count differing pixels
+            let diff = 0;
+            for(let i=0; i<feature.data.length; i++) {
+                if(feature.data[i] !== mem.data[i]) diff++;
+            }
+            
+            if(diff < minDiff) {
+                minDiff = diff;
+                best = mem;
+            }
+        });
+
+        // Tolerance: Allow up to 10% pixel mismatch (approx 25 pixels in 256 total)
+        if(minDiff < 30) return best;
         return null;
     }
 
-    // --- TRAINING ---
+    // --- TRAINING UI ---
     function startTraining() {
         if(trainingQueue.length === 0) {
             document.getElementById('trainModal').style.display = 'none';
-            localStorage.setItem('bucket_templates_v2', JSON.stringify(templates));
-            reprocess();
+            // Save to browser
+            localStorage.setItem('sum10_memory', JSON.stringify(memory));
+            // Reprocess to clear queue
+            processImage();
             return;
         }
 
         const item = trainingQueue[0];
         const modal = document.getElementById('trainModal');
-        const tCanvas = document.getElementById('trainCanvas');
-        const input = document.getElementById('trainInput');
-
-        tCanvas.width = TEMPLATE_SIZE; tCanvas.height = TEMPLATE_SIZE;
-        tCanvas.getContext('2d').drawImage(item.canvas, 0, 0);
+        const c = document.getElementById('trainCanvas');
+        const inp = document.getElementById('trainInput');
         
-        // Scale up for visibility in CSS
+        // Show the normalized view (what the computer sees)
+        c.width = NORM_SIZE; c.height = NORM_SIZE;
+        c.getContext('2d').putImageData(item.feature.debugCanvas.getContext('2d').getImageData(0,0,16,16),0,0);
         
         modal.style.display = 'flex';
-        input.value = '';
-        input.focus();
+        inp.value = '';
+        inp.focus();
     }
 
     function saveTraining() {
         const val = parseInt(document.getElementById('trainInput').value);
         if(isNaN(val)) return;
 
-        // Save pixels
-        const canvas = trainingQueue[0].canvas;
-        const pixels = canvas.getContext('2d').getImageData(0,0,TEMPLATE_SIZE,TEMPLATE_SIZE).data;
+        memory.push({ label: val, data: trainingQueue[0].feature.data });
         
-        // Store just the Red channel since it's B&W
-        const storedData = []; // Full array for easier comparison
-        for(let i=0; i<pixels.length; i++) storedData.push(pixels[i]);
-
-        templates.push({ label: val, data: storedData });
+        // Attempt to auto-solve remaining queue with new knowledge
+        const newData = trainingQueue[0].feature.data;
+        trainingQueue.shift(); // Remove current
         
-        // Remove ALL similar items from queue immediately (Bulk Solve)
-        const currentItemCanvas = trainingQueue[0].canvas;
-        trainingQueue = trainingQueue.filter(q => {
-            // If q looks like the one we just trained, skip it
-            const match = findMatch(q.canvas);
-            return match === null; // Keep if we still don't know it
-        });
-
         startTraining();
     }
 
@@ -339,30 +355,30 @@
         if(e.key === "Enter") saveTraining();
     });
 
-    // --- SOLVING ---
+    // --- SOLVER ---
     function solve() {
         const btn = document.getElementById('solveBtn');
         let best = null;
         let maxScore = -1;
 
-        for (let r1 = 0; r1 < ROWS; r1++) {
-            for (let c1 = 0; c1 < COLS; c1++) {
-                for (let r2 = r1; r2 < ROWS; r2++) {
-                    for (let c2 = c1; c2 < COLS; c2++) {
-                        let sum = 0;
-                        let count = 0;
-                        for(let i=r1; i<=r2; i++){
-                            for(let j=c1; j<=c2; j++){
+        for(let r1=0; r1<ROWS; r1++) {
+            for(let c1=0; c1<COLS; c1++) {
+                for(let r2=r1; r2<ROWS; r2++) {
+                    for(let c2=c1; c2<COLS; c2++) {
+                        let s = 0;
+                        let c = 0;
+                        for(let i=r1; i<=r2; i++) {
+                            for(let j=c1; j<=c2; j++) {
                                 let v = gridData[i][j];
-                                sum += v;
-                                if(v>0) count++;
+                                s += v;
+                                if(v>0) c++;
                             }
                         }
-                        if(sum === 10 && count > 0) {
-                            let score = (count * 1000) + ((r2-r1)*(c2-c1));
+                        if(s === 10 && c > 0) {
+                            let score = (c * 1000) + ((r2-r1)*(c2-c1));
                             if(score > maxScore) {
                                 maxScore = score;
-                                best = { r1, c1, r2, c2, count };
+                                best = {r1,c1,r2,c2,c};
                             }
                         }
                     }
@@ -370,55 +386,107 @@
             }
         }
 
-        currentBest = best;
+        currentBestMove = best;
+        
         if(best) {
-            document.getElementById('status').innerText = `Best Move: Clears ${best.count} buckets!`;
-            btn.innerHTML = "MATCH DONE (Find Next)";
-            btn.className = "btn active";
+            document.getElementById('status').innerText = `Best Move: Clears ${best.c} tiles`;
             btn.disabled = false;
             highlight(best);
         } else {
             document.getElementById('status').innerText = "No moves found.";
-            btn.innerText = "NO MOVES";
-            btn.className = "btn";
             btn.disabled = true;
         }
     }
 
     function highlight(m) {
+        // Redraw detected blobs
+        updateView();
         const ctx = document.getElementById('overlayCanvas').getContext('2d');
-        const w = ctx.canvas.width / COLS;
-        const h = ctx.canvas.height / ROWS;
         
-        ctx.clearRect(0,0, ctx.canvas.width, ctx.canvas.height);
+        // Find bounds of items in grid range
+        let minX=9999, maxX=0, minY=9999, maxY=0;
+        let found = false;
         
-        const x = m.c1 * w;
-        const y = m.r1 * h;
-        const rw = (m.c2 - m.c1 + 1) * w;
-        const rh = (m.r2 - m.r1 + 1) * h;
+        detectedBlobs.forEach(b => {
+            if(b.r >= m.r1 && b.r <= m.r2 && b.c >= m.c1 && b.c <= m.c2) {
+                if(b.x < minX) minX = b.x;
+                if(b.x+b.w > maxX) maxX = b.x+b.w;
+                if(b.y < minY) minY = b.y;
+                if(b.y+b.h > maxY) maxY = b.y+b.h;
+                found = true;
+            }
+        });
 
-        ctx.strokeStyle = "#00e676";
-        ctx.lineWidth = 4;
-        ctx.strokeRect(x, y, rw, rh);
-        ctx.fillStyle = "rgba(0, 230, 118, 0.3)";
-        ctx.fillRect(x, y, rw, rh);
+        if(found) {
+            // Draw nice box
+            const pad = 5;
+            ctx.strokeStyle = "#00ff00";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
+            ctx.fillStyle = "rgba(0,255,0,0.3)";
+            ctx.fillRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
+        }
     }
 
     function confirmMove() {
-        if(!currentBest) return;
-        for(let r=currentBest.r1; r<=currentBest.r2; r++) {
-            for(let c=currentBest.c1; c<=currentBest.c2; c++) {
+        if(!currentBestMove) return;
+        // Clear data
+        for(let r=currentBestMove.r1; r<=currentBestMove.r2; r++) {
+            for(let c=currentBestMove.c1; c<=currentBestMove.c2; c++) {
                 gridData[r][c] = 0;
             }
         }
+        // Remove detected blobs from list so they don't get re-read
+        detectedBlobs = detectedBlobs.filter(b => 
+            !(b.r >= currentBestMove.r1 && b.r <= currentBestMove.r2 && 
+              b.c >= currentBestMove.c1 && b.c <= currentBestMove.c2)
+        );
         solve();
     }
 
-    function resetMem() {
-        if(confirm("Clear memory?")) {
-            localStorage.removeItem('bucket_templates_v2');
-            location.reload();
+    function updateView() {
+        const mode = document.getElementById('viewMode').value;
+        const cvs = document.getElementById('mainCanvas');
+        const ctx = cvs.getContext('2d');
+        const ovl = document.getElementById('overlayCanvas');
+        const oCtx = ovl.getContext('2d');
+        
+        // Clear overlay
+        oCtx.clearRect(0,0,ovl.width, ovl.height);
+
+        if(mode === 'threshold') {
+            // Draw the thresholded view so user can debug
+            const thresh = parseInt(document.getElementById('threshold').value);
+            // Redraw source first to get data
+            ctx.drawImage(srcImg, 0, 0);
+            const imgData = ctx.getImageData(0,0,cvs.width,cvs.height);
+            const d = imgData.data;
+            for(let i=0; i<d.length; i+=4) {
+                const bright = (d[i]+d[i+1]+d[i+2])/3;
+                const val = bright > thresh ? 255 : 0;
+                d[i] = val; d[i+1] = val; d[i+2] = val;
+            }
+            ctx.putImageData(imgData, 0, 0);
+        } else {
+            ctx.drawImage(srcImg, 0, 0);
         }
+
+        // Draw debug boxes around detected blobs
+        detectedBlobs.forEach(b => {
+            oCtx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+            oCtx.lineWidth = 1;
+            oCtx.strokeRect(b.x, b.y, b.w, b.h);
+            if(b.label) {
+                oCtx.fillStyle = "#0f0";
+                oCtx.font = "12px sans-serif";
+                oCtx.fillText(b.label, b.x, b.y-2);
+            }
+        });
+    }
+
+    function resetMemory() {
+        localStorage.removeItem('sum10_memory');
+        location.reload();
     }
 </script>
 </body>
