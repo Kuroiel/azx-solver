@@ -3,84 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Ultimate Solver</title>
+    <title>Sum-10 Smart Auto-Suggest</title>
     <style>
-        :root { --bg: #121212; --panel: #1f1f1f; --accent: #2196f3; --green: #00e676; --red: #ff5252; }
-        body { background: var(--bg); color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        :root { --bg: #111; --panel: #1a1a1a; --primary: #0d47a1; --success: #00c853; --warn: #ffd600; }
+        body { background: var(--bg); color: #ddd; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
-        /* Layout */
-        .main-container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+        .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
         
-        /* Canvas Stage */
-        .stage { position: relative; border: 2px solid #333; background: #000; min-width: 320px; min-height: 240px; display: flex; justify-content: center; align-items: center; }
+        /* The Game Board View */
+        .stage { position: relative; border: 2px solid #333; background: #000; display: flex; justify-content: center; align-items: center; min-width: 300px; min-height: 200px;}
         canvas { display: block; image-rendering: pixelated; }
         #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
-        .placeholder { color: #666; pointer-events: none; }
+        .placeholder { color: #555; pointer-events: none; }
 
-        /* Controls Panel */
-        .panel { width: 340px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        /* Controls */
+        .panel { width: 320px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .status { font-weight: bold; margin-bottom: 10px; color: var(--warn); min-height: 1.2em; }
         
-        .status { font-weight: bold; margin-bottom: 15px; color: #ffca28; min-height: 1.2em; font-size: 0.9em; }
-        
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; margin-bottom: 10px; transition: 0.2s; color: white; background: #424242; }
-        .btn-green { background: var(--green); color: #000; }
-        .btn-green:hover { transform: scale(1.02); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn { width: 100%; padding: 12px; margin-top: 10px; border: none; font-weight: bold; cursor: pointer; color: white; background: #333; border-radius: 4px; transition: 0.1s;}
+        .btn-solve { background: var(--success); color: #000; }
+        .btn-solve:hover { transform: scale(1.02); }
+        .btn:disabled { opacity: 0.3; cursor: default; transform: none; }
 
-        /* Sliders */
-        .slider-group { margin: 15px 0; padding: 10px; background: #2c2c2c; border-radius: 6px; }
-        .slider-header { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
-        input[type=range] { width: 100%; cursor: pointer; }
-
-        /* View Toggle */
-        .toggle-row { display: flex; gap: 5px; margin-bottom: 10px; }
-        .toggle-btn { flex: 1; padding: 8px; font-size: 0.8em; background: #333; border: 1px solid #444; color: #888; cursor: pointer; text-align: center; }
-        .toggle-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .slider-box { margin: 15px 0; padding: 10px; background: #222; border-radius: 4px; border: 1px solid #333; }
+        .slider-label { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
 
         /* Training Modal */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-box { background: #222; padding: 25px; border-radius: 12px; text-align: center; border: 1px solid #444; max-width: 300px; }
-        .train-preview { width: 64px; height: 64px; border: 1px solid #666; margin: 15px auto; display: block; image-rendering: pixelated; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-box { background: #222; padding: 30px; border-radius: 10px; text-align: center; border: 1px solid #555; width: 280px; }
+        .train-img { width: 64px; height: 64px; border: 2px solid #555; margin: 15px auto; display: block; image-rendering: pixelated; }
         
-        .train-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        .train-input { font-size: 24px; padding: 5px; text-align: center; background: #111; color: white; border: 1px solid #555; width: 100%; box-sizing: border-box; }
+        .guess-text { color: var(--success); font-size: 0.9em; margin-bottom: 5px; min-height: 1.2em; }
+        .train-input { font-size: 30px; width: 80px; text-align: center; background: #000; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; }
         
-        .btn-ignore { background: var(--red); color: white; font-size: 0.8em; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-ignore { background: #d32f2f; font-size: 0.8em; }
+        .btn-save { background: var(--success); color:black; }
+
+        .memory-stats { font-size: 0.7em; color: #555; text-align: center; margin-top: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <h2 style="margin-top:0; color:var(--accent)">ahhh</h2>
+    <h2 style="color:#29b6f6; margin-top:0;">why hard</h2>
     
-    <div class="main-container">
-        <!-- Visual Stage -->
+    <div class="container">
+        <!-- Main Image -->
         <div class="stage">
             <span class="placeholder">Paste Screenshot (Ctrl+V)</span>
             <canvas id="mainCanvas" style="display:none"></canvas>
             <canvas id="overlayCanvas"></canvas>
         </div>
 
-        <!-- Right Panel -->
+        <!-- Controls -->
         <div class="panel">
             <div id="status" class="status">Waiting for image...</div>
 
-            <!-- View Toggles -->
-            <div class="toggle-row">
-                <div class="toggle-btn active" id="viewNormal" onclick="setView('normal')">Normal View</div>
-                <div class="toggle-btn" id="viewDebug" onclick="setView('debug')">Computer Vision</div>
+            <div class="slider-box">
+                <div class="slider-label"><span>Detection Sensitivity</span> <span id="threshVal">180</span></div>
+                <input type="range" id="threshold" min="100" max="250" value="180" style="width:100%" oninput="process()">
+                <div style="font-size:0.7em; color:#666; margin-top:5px;">Move slider until you see clean white numbers below.</div>
             </div>
 
-            <!-- Sliders -->
-            <div class="slider-group">
-                <div class="slider-header"><span>Brightness Threshold</span> <span id="threshVal">180</span></div>
-                <input type="range" id="threshold" min="100" max="250" value="180" oninput="process()">
-                <div style="font-size:0.7em; color:#888; margin-top:5px;">Increase if detecting bucket rims. Decrease if detecting nothing.</div>
-            </div>
-
-            <button id="solveBtn" class="btn btn-green" disabled onclick="confirmMove()">SOLVE BOARD</button>
+            <button id="solveBtn" class="btn btn-solve" disabled onclick="confirmMove()">SOLVE</button>
             
-            <div style="text-align:center; font-size:0.8em; margin-top:15px; cursor:pointer; color:#777;" onclick="clearMemory()">
-                [ Reset Learned Memory ]
+            <div class="memory-stats" onclick="resetMem()">
+                [ Memory Size: <span id="memSize">0</span> templates ]<br>
+                (Click to Reset)
             </div>
         </div>
     </div>
@@ -88,40 +77,40 @@
     <!-- Training Modal -->
     <div id="trainModal" class="modal">
         <div class="modal-box">
-            <h3>Unknown Shape</h3>
-            <p style="color:#aaa; font-size:0.8em;">Is this a number?</p>
+            <h3 style="margin:0 0 10px 0;">New Shape</h3>
             
-            <!-- We show the normalized version so user sees exactly what computer sees -->
-            <canvas id="trainCanvas" class="train-preview"></canvas>
+            <!-- What Computer Sees -->
+            <canvas id="trainCanvas" class="train-img"></canvas>
             
-            <input type="number" id="trainInput" class="train-input" min="0" max="9" placeholder="#">
+            <div id="guessText" class="guess-text"></div>
+            <input type="number" id="trainInput" class="train-input" min="0" max="9">
             
-            <div class="train-actions">
-                <button class="btn btn-ignore" style="margin:0" onclick="ignoreShape()">IGNORE (Garbage)</button>
-                <button class="btn btn-green" style="margin:0" onclick="saveShape()">SAVE</button>
+            <div class="modal-actions">
+                <button class="btn btn-ignore" onclick="ignoreShape()">IGNORE</button>
+                <button class="btn btn-save" onclick="saveShape()">ENTER</button>
             </div>
+            <div style="font-size:0.7em; color:#666; margin-top:10px;">Press Enter to confirm</div>
         </div>
     </div>
 
 <script>
-    // --- SETTINGS ---
+    // --- CONFIG ---
     const ROWS = 15;
     const COLS = 10;
-    const NORM_SIZE = 16; // Uniform size for all shapes
-    const MATCH_STRICTNESS = 0.85; // 85% similarity required to auto-match
+    const NORM_SIZE = 16; 
     
     // --- STATE ---
     let srcImg = null;
-    let viewMode = 'normal'; // 'normal' or 'debug'
     let gridData = [];
     let blobs = [];
     let trainingQueue = [];
     let currentBest = null;
-    
-    // Memory: [ { label: 5, data: [0,1,0...] }, ... ]
-    let memory = JSON.parse(localStorage.getItem('sum10_ultimate_mem')) || [];
+    let memory = JSON.parse(localStorage.getItem('sum10_suggest_mem')) || [];
 
-    // --- INPUT HANDLER ---
+    // --- INIT ---
+    updateMemStats();
+
+    // --- PASTE HANDLER ---
     window.addEventListener('paste', e => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let item of items) {
@@ -134,12 +123,14 @@
         }
     });
 
-    // --- MAIN PROCESS ---
+    // --- PROCESSING PIPELINE ---
     function process() {
-        if (!srcImg) return;
-        
-        // 1. Setup Canvas
+        if(!srcImg) return;
         document.querySelector('.placeholder').style.display = 'none';
+
+        const thresh = parseInt(document.getElementById('threshold').value);
+        document.getElementById('threshVal').innerText = thresh;
+
         const cvs = document.getElementById('mainCanvas');
         const ctx = cvs.getContext('2d');
         const ovl = document.getElementById('overlayCanvas');
@@ -148,60 +139,57 @@
         cvs.width = srcImg.width; cvs.height = srcImg.height;
         ovl.width = srcImg.width; ovl.height = srcImg.height;
 
-        const thresh = parseInt(document.getElementById('threshold').value);
-        document.getElementById('threshVal').innerText = thresh;
-
-        // 2. Draw & Threshold
+        // Draw & Threshold
         ctx.drawImage(srcImg, 0, 0);
-        const rawData = ctx.getImageData(0, 0, cvs.width, cvs.height);
         
-        // 3. Find Blobs
+        // 1. Detect Blobs
+        const rawData = ctx.getImageData(0,0,cvs.width,cvs.height);
         blobs = detectBlobs(rawData, cvs.width, cvs.height, thresh);
 
-        // 4. Map to Grid
+        // 2. Map to Grid
         gridData = mapBlobsToGrid(blobs);
 
-        // 5. Recognize
+        // 3. Recognize
         trainingQueue = [];
-        let recognizedCount = 0;
+        let recognized = 0;
 
         blobs.forEach(b => {
-            if(b.gridR === null) return; // Not on grid
+            if(b.gridR === null) return;
 
-            // Normalize Shape (Elastic Resize)
-            const feature = extractFeature(ctx, b);
+            // Extract features
+            b.feature = extractFeature(ctx, b);
             
-            // Match
-            const match = findMatch(feature);
+            // Find NEAREST match
+            const bestMatch = findNearestMatch(b.feature);
             
-            if (match) {
-                if (match.label === -1) {
-                    // This is known garbage (ignore)
-                    b.isGarbage = true;
+            // Decision Logic
+            // If error is very low (< 10 pixels different out of 256), auto-accept
+            if(bestMatch && bestMatch.error < 15) {
+                if(bestMatch.label === -1) {
+                    b.isGarbage = true; // Auto-ignore garbage
                 } else {
-                    gridData[b.gridR][b.gridC] = match.label;
-                    b.label = match.label;
-                    recognizedCount++;
+                    gridData[b.gridR][b.gridC] = bestMatch.label;
+                    b.label = bestMatch.label;
+                    recognized++;
                 }
             } else {
-                // Unknown shape
-                b.feature = feature;
+                // Not sure enough -> Ask user (but provide the best guess!)
+                b.bestGuess = bestMatch; 
                 trainingQueue.push(b);
             }
         });
 
-        // 6. Update UI
+        // 4. Update UI
         drawOverlay();
-        
-        if (trainingQueue.length > 0) {
-            document.getElementById('status').innerText = `Training Required: ${trainingQueue.length} new shapes found.`;
+
+        if(trainingQueue.length > 0) {
+            document.getElementById('status').innerText = `Needs Input: ${trainingQueue.length} items.`;
             startTraining();
-        } else if (recognizedCount > 0) {
-            document.getElementById('status').innerText = `Ready. Found ${recognizedCount} numbers.`;
+        } else if(recognized > 0) {
+            document.getElementById('status').innerText = `Ready. Found ${recognized} numbers.`;
             solve();
         } else {
-            document.getElementById('status').innerText = "No numbers found. Check Threshold slider.";
-            document.getElementById('solveBtn').disabled = true;
+            document.getElementById('status').innerText = "No numbers found. Check slider.";
         }
     }
 
@@ -213,130 +201,168 @@
 
         for(let i=0; i<w*h; i++) {
             if(visited[i]) continue;
-            
-            // Brightness check
-            const bright = (d[i*4]+d[i*4+1]+d[i*4+2])/3;
-            
-            if(bright > threshold) {
-                // Flood Fill
+            // Brightness check (R+G+B)/3
+            if((d[i*4]+d[i*4+1]+d[i*4+2])/3 > threshold) {
                 let stack = [i];
                 visited[i] = 1;
                 let minX=w, maxX=0, minY=h, maxY=0;
-                let pixelCount = 0;
-
+                
                 while(stack.length) {
-                    const cur = stack.pop();
-                    const cx = cur % w;
-                    const cy = Math.floor(cur / w);
-                    
-                    if(cx<minX) minX=cx;
-                    if(cx>maxX) maxX=cx;
-                    if(cy<minY) minY=cy;
-                    if(cy>maxY) maxY=cy;
-                    pixelCount++;
+                    const c = stack.pop();
+                    const cx = c % w;
+                    const cy = Math.floor(c / w);
+                    if(cx<minX) minX=cx; if(cx>maxX) maxX=cx;
+                    if(cy<minY) minY=cy; if(cy>maxY) maxY=cy;
 
-                    const neighbors = [cur+1, cur-1, cur+w, cur-w];
-                    for(let n of neighbors) {
-                        if(n>=0 && n<w*h && !visited[n]) {
-                            const nb = (d[n*4]+d[n*4+1]+d[n*4+2])/3;
-                            if(nb > threshold) {
-                                visited[n] = 1;
-                                stack.push(n);
-                            }
+                    [c+1, c-1, c+w, c-w].forEach(n => {
+                        if(n>=0 && n<w*h && !visited[n] && (d[n*4]+d[n*4+1]+d[n*4+2])/3 > threshold) {
+                            visited[n] = 1;
+                            stack.push(n);
                         }
-                    }
+                    });
                 }
-
-                const width = maxX - minX + 1;
-                const height = maxY - minY + 1;
-
-                // FILTER: Remove "Gibberish"
-                // 1. Must be reasonably sized (bigger than dust, smaller than screen)
-                // 2. Must not be extremely wide (bucket rims are wide and short)
-                const ratio = width / height;
-                if (width > 5 && height > 8 && width < 50 && height < 50 && ratio < 1.5) {
-                    results.push({ x:minX, y:minY, w:width, h:height });
+                const width = maxX-minX+1;
+                const height = maxY-minY+1;
+                // Basic size filter to remove dust/lines
+                if(width>3 && height>6 && width<60 && height<60) {
+                    results.push({x:minX, y:minY, w:width, h:height});
                 }
             }
         }
         return results;
     }
 
-    // --- FEATURE EXTRACTION (ELASTIC RESIZE) ---
+    // --- FEATURE EXTRACTION ---
     function extractFeature(ctx, b) {
-        // Create normalized 16x16 canvas
+        // Create 16x16 normalized grid
         const tc = document.createElement('canvas');
         tc.width = NORM_SIZE; tc.height = NORM_SIZE;
         const tctx = tc.getContext('2d');
-
-        // Draw the blob stretched to exactly 16x16
-        // This solves the issue of different fonts/sizes looking different
+        
+        // Scale blob to fit
         tctx.drawImage(ctx.canvas, b.x, b.y, b.w, b.h, 0, 0, NORM_SIZE, NORM_SIZE);
-
-        // Binarize result (0 or 1)
-        const id = tctx.getImageData(0,0,NORM_SIZE,NORM_SIZE);
-        const binData = [];
-        for(let i=0; i<id.data.length; i+=4) {
-            // High contrast check
-            binData.push(id.data[i] > 100 ? 1 : 0);
+        
+        // Convert to binary array
+        const id = tctx.getImageData(0,0,NORM_SIZE,NORM_SIZE).data;
+        const arr = [];
+        for(let i=0; i<id.length; i+=4) {
+            // High contrast
+            arr.push(id[i] > 100 ? 1 : 0);
         }
-        return binData;
+        return arr;
     }
 
-    // --- MATCHING LOGIC ---
-    function findMatch(feature) {
+    // --- MATCHING ---
+    function findNearestMatch(feature) {
         if(memory.length === 0) return null;
         
-        let bestItem = null;
-        let maxSim = -1;
+        let best = null;
+        let minError = Infinity;
 
         memory.forEach(mem => {
-            // Calculate Similarity %
-            let matches = 0;
-            const total = feature.length;
-            for(let i=0; i<total; i++) {
-                if(feature[i] === mem.data[i]) matches++;
+            let error = 0;
+            // Hamming distance (count different pixels)
+            for(let i=0; i<feature.length; i++) {
+                if(feature[i] !== mem.data[i]) error++;
             }
-            const sim = matches / total;
-            
-            if(sim > maxSim) {
-                maxSim = sim;
-                bestItem = mem;
+            if(error < minError) {
+                minError = error;
+                best = mem;
             }
         });
 
-        if (maxSim >= MATCH_STRICTNESS) return bestItem;
-        return null;
+        // Return the closest thing we have, even if error is high
+        return { label: best.label, error: minError };
     }
 
-    // --- GRID MAPPING (Adaptive) ---
+    // --- TRAINING UI ---
+    function startTraining() {
+        if(trainingQueue.length === 0) {
+            document.getElementById('trainModal').style.display = 'none';
+            updateMemStats();
+            process(); // Re-run to solve
+            return;
+        }
+
+        const b = trainingQueue[0];
+        const modal = document.getElementById('trainModal');
+        const guessTxt = document.getElementById('guessText');
+        const inp = document.getElementById('trainInput');
+        const c = document.getElementById('trainCanvas');
+
+        // Draw preview
+        c.width = NORM_SIZE; c.height = NORM_SIZE;
+        const ctx = c.getContext('2d');
+        const img = ctx.createImageData(NORM_SIZE, NORM_SIZE);
+        for(let i=0; i<b.feature.length; i++) {
+            const val = b.feature[i]*255;
+            img.data[i*4]=val; img.data[i*4+1]=val; img.data[i*4+2]=val; img.data[i*4+3]=255;
+        }
+        ctx.putImageData(img,0,0);
+
+        // AUTO-SUGGESTION LOGIC
+        inp.value = '';
+        guessTxt.innerText = '';
+        
+        if(b.bestGuess) {
+            // If we have a guess, pre-fill it!
+            if(b.bestGuess.label !== -1) {
+                inp.value = b.bestGuess.label;
+                guessTxt.innerText = `I think this is a ${b.bestGuess.label}?`;
+            } else {
+                guessTxt.innerText = "Looks like garbage?";
+            }
+        }
+
+        modal.style.display = 'flex';
+        inp.focus();
+        inp.select();
+    }
+
+    function saveShape() {
+        const val = parseInt(document.getElementById('trainInput').value);
+        if(isNaN(val)) return;
+
+        // Add to memory
+        memory.push({ label: val, data: trainingQueue[0].feature });
+        localStorage.setItem('sum10_suggest_mem', JSON.stringify(memory));
+        
+        trainingQueue.shift();
+        startTraining();
+    }
+
+    function ignoreShape() {
+        memory.push({ label: -1, data: trainingQueue[0].feature });
+        localStorage.setItem('sum10_suggest_mem', JSON.stringify(memory));
+        trainingQueue.shift();
+        startTraining();
+    }
+
+    document.getElementById('trainInput').addEventListener("keydown", (e) => {
+        if(e.key === "Enter") saveShape();
+    });
+
+    // --- GRID MAPPER ---
     function mapBlobsToGrid(rawBlobs) {
         let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
         if(rawBlobs.length === 0) return grid;
         
-        // Find grid bounds
         let minX=9999, maxX=0, minY=9999, maxY=0;
         rawBlobs.forEach(b => {
-            if(b.x < minX) minX=b.x;
-            if(b.x+b.w > maxX) maxX=b.x+b.w;
-            if(b.y < minY) minY=b.y;
-            if(b.y+b.h > maxY) maxY=b.y+b.h;
+            if(b.x<minX) minX=b.x; if(b.x+b.w>maxX) maxX=b.x+b.w;
+            if(b.y<minY) minY=b.y; if(b.y+b.h>maxY) maxY=b.y+b.h;
         });
 
-        const totalW = maxX - minX;
-        const totalH = maxY - minY;
-        
-        // Approx cell size
-        const cellW = totalW / 9.5; // (10 cols - padding)
-        const cellH = totalH / 14.5; // (15 rows - padding)
+        const totalW = maxX-minX;
+        const totalH = maxY-minY;
+        const cellW = totalW/9.5;
+        const cellH = totalH/14.5;
 
         rawBlobs.forEach(b => {
-            const cx = b.x + b.w/2;
-            const cy = b.y + b.h/2;
-            
-            const c = Math.round((cx - minX) / (totalW/9));
-            const r = Math.round((cy - minY) / (totalH/14));
-
+            const cx = b.x+b.w/2;
+            const cy = b.y+b.h/2;
+            const c = Math.round((cx-minX)/(totalW/9));
+            const r = Math.round((cy-minY)/(totalH/14));
             if(c>=0 && c<COLS && r>=0 && r<ROWS) {
                 b.gridR = r; b.gridC = c;
             } else {
@@ -346,85 +372,28 @@
         return grid;
     }
 
-    // --- TRAINING UI ---
-    function startTraining() {
-        if(trainingQueue.length === 0) {
-            document.getElementById('trainModal').style.display = 'none';
-            localStorage.setItem('sum10_ultimate_mem', JSON.stringify(memory));
-            process(); // Re-run to solve
-            return;
-        }
-
-        const b = trainingQueue[0];
-        const modal = document.getElementById('trainModal');
-        const prev = document.getElementById('trainCanvas');
-        const inp = document.getElementById('trainInput');
-        
-        // Render preview
-        prev.width = NORM_SIZE; prev.height = NORM_SIZE;
-        const ctx = prev.getContext('2d');
-        const img = ctx.createImageData(NORM_SIZE, NORM_SIZE);
-        for(let i=0; i<b.feature.length; i++) {
-            const val = b.feature[i] * 255;
-            img.data[i*4] = val;   // R
-            img.data[i*4+1] = val; // G
-            img.data[i*4+2] = val; // B
-            img.data[i*4+3] = 255; // Alpha
-        }
-        ctx.putImageData(img, 0, 0);
-
-        // Reset UI
-        modal.style.display = 'flex';
-        inp.value = '';
-        inp.focus();
-    }
-
-    function saveShape() {
-        const val = parseInt(document.getElementById('trainInput').value);
-        if(isNaN(val)) return;
-
-        // Add to memory
-        memory.push({ label: val, data: trainingQueue[0].feature });
-        
-        // Remove from queue
-        trainingQueue.shift();
-        startTraining();
-    }
-
-    function ignoreShape() {
-        // Add as label -1 (Garbage)
-        memory.push({ label: -1, data: trainingQueue[0].feature });
-        trainingQueue.shift();
-        startTraining();
-    }
-
-    document.getElementById('trainInput').addEventListener("keydown", (e) => {
-        if(e.key === "Enter") saveShape();
-    });
-
     // --- SOLVER ---
     function solve() {
         let best = null;
         let maxScore = -1;
-
+        
         for (let r1 = 0; r1 < ROWS; r1++) {
             for (let c1 = 0; c1 < COLS; c1++) {
                 for (let r2 = r1; r2 < ROWS; r2++) {
                     for (let c2 = c1; c2 < COLS; c2++) {
-                        let sum = 0;
-                        let count = 0;
+                        let sum = 0; let count = 0;
                         for(let i=r1; i<=r2; i++){
                             for(let j=c1; j<=c2; j++){
                                 let v = gridData[i][j];
-                                sum += v;
-                                if(v>0) count++;
+                                sum+=v; if(v>0) count++;
                             }
                         }
-                        if(sum === 10 && count > 0) {
-                            let score = (count * 1000) + ((r2-r1)*(c2-c1));
+                        if(sum===10 && count>0) {
+                            // Score: Higher count is better. Area breaks ties.
+                            let score = (count*1000) + ((r2-r1)*(c2-c1));
                             if(score > maxScore) {
                                 maxScore = score;
-                                best = { r1, c1, r2, c2, count };
+                                best = { r1,c1,r2,c2,count };
                             }
                         }
                     }
@@ -434,120 +403,76 @@
 
         currentBest = best;
         const btn = document.getElementById('solveBtn');
-
         if(best) {
             document.getElementById('status').innerText = `Best Move: Clears ${best.count} tiles.`;
-            btn.innerHTML = "MATCH DONE (Next)";
             btn.disabled = false;
+            btn.innerText = "MATCH DONE (Next)";
             drawOverlay(best);
         } else {
             document.getElementById('status').innerText = "No moves available.";
-            btn.innerText = "NO MOVES";
             btn.disabled = true;
+            btn.innerText = "NO MOVES";
             drawOverlay();
         }
     }
 
-    // --- DRAWING UTILS ---
-    function drawOverlay(highlight = null) {
+    function drawOverlay(highlight=null) {
         const cvs = document.getElementById('overlayCanvas');
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        const isDebug = viewMode === 'debug';
-
-        // Draw all blobs
+        // Draw recognized numbers
         blobs.forEach(b => {
-            if(b.isGarbage) return; // Don't show garbage
-
-            if(isDebug) {
-                ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
-                ctx.lineWidth = 1;
-                ctx.strokeRect(b.x, b.y, b.w, b.h);
-            }
-            
-            if(b.label) {
-                // If recognized, show number
-                ctx.fillStyle = "#00e676";
-                ctx.font = "bold 14px sans-serif";
+            if(b.label && b.label !== -1) {
+                ctx.fillStyle = "#00c853";
+                ctx.font = "bold 12px monospace";
                 ctx.fillText(b.label, b.x, b.y-2);
+                ctx.strokeStyle = "rgba(0,255,0,0.3)";
+                ctx.strokeRect(b.x, b.y, b.w, b.h);
             }
         });
 
-        // Highlight Solution
+        // Highlight Move
         if(highlight) {
-            // Find bounding box of solution blobs
             let minX=9999, maxX=0, minY=9999, maxY=0;
             let found = false;
-
             blobs.forEach(b => {
-                if(b.gridR >= highlight.r1 && b.gridR <= highlight.r2 && 
-                   b.gridC >= highlight.c1 && b.gridC <= highlight.c2 && !b.isGarbage) {
-                    if(b.x < minX) minX = b.x;
-                    if(b.x+b.w > maxX) maxX = b.x+b.w;
-                    if(b.y < minY) minY = b.y;
-                    if(b.y+b.h > maxY) maxY = b.y+b.h;
-                    found = true;
+                if(b.gridR>=highlight.r1 && b.gridR<=highlight.r2 && b.gridC>=highlight.c1 && b.gridC<=highlight.c2 && b.label>0) {
+                    if(b.x<minX) minX=b.x; if(b.x+b.w>maxX) maxX=b.x+b.w;
+                    if(b.y<minY) minY=b.y; if(b.y+b.h>maxY) maxY=b.y+b.h;
+                    found=true;
                 }
             });
-
             if(found) {
-                const pad = 4;
                 ctx.strokeStyle = "#00e676";
                 ctx.lineWidth = 4;
-                ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
+                ctx.strokeRect(minX-4, minY-4, (maxX-minX)+8, (maxY-minY)+8);
                 ctx.fillStyle = "rgba(0, 230, 118, 0.3)";
-                ctx.fillRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
+                ctx.fillRect(minX-4, minY-4, (maxX-minX)+8, (maxY-minY)+8);
             }
         }
-    }
-
-    function setView(mode) {
-        viewMode = mode;
-        document.getElementById('viewNormal').classList.toggle('active', mode === 'normal');
-        document.getElementById('viewDebug').classList.toggle('active', mode === 'debug');
-        
-        const cvs = document.getElementById('mainCanvas');
-        const ctx = cvs.getContext('2d');
-        const thresh = parseInt(document.getElementById('threshold').value);
-
-        // Repaint background
-        if(mode === 'debug') {
-            ctx.drawImage(srcImg, 0, 0);
-            const d = ctx.getImageData(0,0,cvs.width,cvs.height);
-            for(let i=0; i<d.data.length; i+=4) {
-                const b = (d.data[i]+d.data[i+1]+d.data[i+2])/3;
-                const v = b > thresh ? 255 : 0;
-                d.data[i] = v; d.data[i+1] = v; d.data[i+2] = v;
-            }
-            ctx.putImageData(d, 0, 0);
-        } else {
-            ctx.drawImage(srcImg, 0, 0);
-        }
-        drawOverlay(currentBest);
     }
 
     function confirmMove() {
         if(!currentBest) return;
-        // Clear data
         for(let r=currentBest.r1; r<=currentBest.r2; r++) {
             for(let c=currentBest.c1; c<=currentBest.c2; c++) {
                 gridData[r][c] = 0;
             }
         }
-        // Remove blobs to prevent re-read
-        blobs = blobs.filter(b => 
-           !(b.gridR >= currentBest.r1 && b.gridR <= currentBest.r2 && 
-             b.gridC >= currentBest.c1 && b.gridC <= currentBest.c2)
-        );
+        blobs = blobs.filter(b => !(b.gridR>=currentBest.r1 && b.gridR<=currentBest.r2 && b.gridC>=currentBest.c1 && b.gridC<=currentBest.c2));
         solve();
     }
 
-    function clearMemory() {
-        if(confirm("Erase all learned shapes?")) {
-            localStorage.removeItem('sum10_ultimate_mem');
+    function resetMem() {
+        if(confirm("Clear all memory?")) {
+            localStorage.removeItem('sum10_suggest_mem');
             location.reload();
         }
+    }
+    
+    function updateMemStats() {
+        document.getElementById('memSize').innerText = memory.length;
     }
 </script>
 </body>
