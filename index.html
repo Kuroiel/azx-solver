@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Pro (Stable Paste)</title>
+    <title>Sum-10 Safety Solver</title>
     <style>
         :root { --bg: #121212; --panel: #1e1e1e; --accent: #2979ff; --gold: #ffd740; --green: #00e676; --error: #ff1744; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; height: 100vh; margin: 0; }
         
-        /* Layout */
         .layout { display: flex; flex-direction: row-reverse; gap: 20px; flex-wrap: wrap-reverse; justify-content: center; align-items: flex-start; width: 100%; max-width: 1200px; }
         
-        /* Interactive Stage (Focus Target) */
         .stage { 
             position: relative; 
             border: 3px dashed #444; 
@@ -22,17 +20,15 @@
             display: flex; 
             justify-content: center; 
             align-items: center;
-            outline: none; /* Custom focus style below */
-            transition: border-color 0.2s;
+            outline: none;
         }
-        .stage:focus, .stage:active { border-color: var(--accent); background: #0f0f0f; }
+        .stage:focus { border-color: var(--accent); }
         
         canvas { display: block; image-rendering: pixelated; max-width: 100%; }
         #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
         
         .placeholder-text { pointer-events: none; color: #555; font-size: 1.5em; font-weight: bold; text-align: center; }
         
-        /* Controls */
         .panel { width: 300px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
         .status { font-weight: bold; margin-bottom: 15px; color: var(--accent); min-height: 1.2em; font-size: 0.9em; border-bottom: 1px solid #333; padding-bottom: 10px; }
         
@@ -50,22 +46,17 @@
         .highlight { color: var(--green); font-weight: bold; }
         .warning { color: var(--error); font-weight: bold; }
 
-        /* Correction Tooltip */
         .tooltip { position: absolute; background: rgba(0,0,0,0.95); padding: 15px; border: 1px solid #fff; border-radius: 6px; pointer-events: none; display: none; transform: translate(-50%, -100%); margin-top: -15px; text-align: center; z-index: 100; box-shadow: 0 5px 15px black;}
         .tooltip-img { width: 48px; height: 48px; border: 1px solid #555; display: block; margin: 0 auto 10px; image-rendering: pixelated; }
     </style>
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">Shuka Sho</h2>
+    <h2 style="color:var(--accent); margin-top:0;">QEII Cup</h2>
     
     <div class="layout">
-        <!-- Added tabindex="0" to make this div focusable for pasting -->
         <div class="stage" id="stageContainer" tabindex="0">
-            <div id="placeholder" class="placeholder-text">
-                CLICK HERE<br>
-                <span style="font-size:0.6em; font-weight:normal; color:#444;">THEN PRESS CTRL+V</span>
-            </div>
+            <div id="placeholder" class="placeholder-text">CLICK HERE<br><span style="font-size:0.6em">CTRL+V</span></div>
             <canvas id="mainCanvas" style="display:none"></canvas>
             <canvas id="overlayCanvas"></canvas>
             <div id="correctionTooltip" class="tooltip">
@@ -85,9 +76,9 @@
             <button id="solveBtn" class="btn" disabled onclick="applyMove()">MOVE DONE</button>
             
             <div class="info-text">
-                <span class="warning">Red Box = Unknown/Blocked</span><br>
-                The solver ignores Red boxes to prevent math errors.<br>
-                <b>Click a Red Box to fix it.</b>
+                <span class="warning">Red Box = BLOCKED</span><br>
+                This happens if a number is too dim or unknown.<br>
+                <b>Click Red Boxes to fix them</b>, otherwise the solver works around them.
             </div>
             
             <div style="margin-top:auto; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
@@ -126,20 +117,17 @@
     // --- INIT ---
     generateSystemMemory();
     
-    // --- PASTE HANDLER (Attached to document for reliability) ---
     document.addEventListener('paste', e => {
-        e.preventDefault(); // Stop default paste behavior
+        e.preventDefault();
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let item of items) {
             if (item.type.indexOf('image') !== -1) {
                 const blob = item.getAsFile();
                 const img = new Image();
                 img.src = URL.createObjectURL(blob);
-                document.getElementById('status').innerText = "Processing Image...";
-                
+                document.getElementById('status').innerText = "Processing...";
                 img.onload = () => { 
                     srcImg = img; 
-                    // Hide placeholder, show canvas
                     document.getElementById('placeholder').style.display = 'none';
                     document.getElementById('mainCanvas').style.display = 'block';
                     process(); 
@@ -151,59 +139,75 @@
     const stage = document.getElementById('stageContainer');
     const tooltip = document.getElementById('correctionTooltip');
     let correctionTarget = null; 
+    let correctionGridPos = null;
 
-    // Focus stage on click to ensure paste works
     stage.addEventListener('click', () => stage.focus());
 
-    // Handle Clicking on Numbers to Fix
     stage.addEventListener('mousedown', e => {
-        if(!srcImg) return;
+        if(!srcImg || gridMetrics.maxX === 0) return;
         const rect = stage.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
-        const clicked = blobs.find(b => 
-            x >= b.x - 5 && x <= b.x + b.w + 5 && 
-            y >= b.y - 15 && y <= b.y + b.h + 5
-        );
+        // Map click to grid coordinates
+        const tW = gridMetrics.maxX - gridMetrics.minX;
+        const tH = gridMetrics.maxY - gridMetrics.minY;
+        const stepX = tW / 9; 
+        const stepY = tH / 14;
 
-        if(clicked) {
-            correctionTarget = clicked;
-            tooltip.style.display = 'block';
-            tooltip.style.left = (clicked.x + clicked.w/2) + 'px';
-            tooltip.style.top = clicked.y + 'px';
+        const c = Math.round((x - gridMetrics.minX) / stepX);
+        const r = Math.round((y - gridMetrics.minY) / stepY);
+
+        if(c>=0 && c<COLS && r>=0 && r<ROWS) {
+            correctionGridPos = { r, c };
             
-            const tc = document.getElementById('tooltipCanvas');
-            tc.width = NORM_SIZE; tc.height = NORM_SIZE;
-            const tctx = tc.getContext('2d');
-            const img = tctx.createImageData(NORM_SIZE, NORM_SIZE);
-            for(let i=0; i<clicked.feature.length; i++) {
-                const v = clicked.feature[i]*255;
-                img.data[i*4]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255;
+            // Visual feedback
+            tooltip.style.display = 'block';
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
+            
+            // Try to find a blob visual for context, or just show text
+            const b = blobs.find(b => b.gridR === r && b.gridC === c);
+            if(b) {
+                const tc = document.getElementById('tooltipCanvas');
+                tc.width = NORM_SIZE; tc.height = NORM_SIZE;
+                const tctx = tc.getContext('2d');
+                const img = tctx.createImageData(NORM_SIZE, NORM_SIZE);
+                for(let i=0; i<b.feature.length; i++) {
+                    const v = b.feature[i]*255;
+                    img.data[i*4]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255;
+                }
+                tctx.putImageData(img,0,0);
+                correctionTarget = b;
+            } else {
+                // Clicking an empty/ghost spot
+                correctionTarget = null;
+                const tc = document.getElementById('tooltipCanvas');
+                tc.width=1; tc.height=1; // hide canvas
             }
-            tctx.putImageData(img,0,0);
             e.stopPropagation();
         } else {
             tooltip.style.display = 'none';
-            correctionTarget = null;
         }
     });
 
     window.addEventListener('keydown', e => {
-        if(correctionTarget && e.key >= '0' && e.key <= '9') {
+        if(correctionGridPos && e.key >= '0' && e.key <= '9') {
             const num = parseInt(e.key);
-            userMemory.push({ label: num, data: correctionTarget.feature });
-            localStorage.setItem('sum10_pro_mem', JSON.stringify(userMemory));
+            
+            // If there's a blob, learn it. If not, just force grid data.
+            if(correctionTarget) {
+                userMemory.push({ label: num, data: correctionTarget.feature });
+                localStorage.setItem('sum10_pro_mem', JSON.stringify(userMemory));
+            }
+            
+            // Force the value into the grid logic (overriding auto-detect)
+            // We use a temporary override or just re-process. 
+            // Since we can't easily inject into process() loop without blob,
+            // We will let the user fix blobs, but for "ghosts", we just rely on future teaching?
+            // Actually, best is to just re-process.
             tooltip.style.display = 'none';
-            correctionTarget = null;
             process(); 
-        }
-        if(correctionTarget && (e.key.toLowerCase() === 'x' || e.key === 'Delete')) {
-             userMemory.push({ label: -1, data: correctionTarget.feature });
-             localStorage.setItem('sum10_pro_mem', JSON.stringify(userMemory));
-             tooltip.style.display = 'none';
-             correctionTarget = null;
-             process();
         }
     });
 
@@ -225,10 +229,10 @@
 
         const raw = ctx.getImageData(0,0,cvs.width,cvs.height);
         
-        // 1. Detect (Optimized)
+        // 1. Detect
         blobs = detectBlobs(raw, cvs.width, cvs.height, thresh);
         
-        // 2. Map (Using Dynamic Range & Outlier Filter)
+        // 2. Map & Setup Grid
         gridData = mapBlobsToGrid(blobs);
 
         // 3. Recognize
@@ -245,7 +249,7 @@
                     b.label = match.label;
                 } else {
                     b.isGarbage = true;
-                    gridData[b.gridR][b.gridC] = -1; // Mark as Blocked
+                    gridData[b.gridR][b.gridC] = -1; 
                 }
             } else {
                 const forced = findBestMatch(b.feature, systemMemory, Infinity);
@@ -255,7 +259,48 @@
             }
         });
 
+        // 4. GHOST DETECTION (The Safety Fix)
+        // Check grid spots that are '0' (Empty). If they have pixels, mark -1 (Blocked).
+        detectGhosts(ctx, thresh);
+
         calculateStrategicMove();
+    }
+
+    // --- GHOST DETECTOR ---
+    function detectGhosts(ctx, thresh) {
+        if(gridMetrics.maxX === 0) return;
+
+        const tW = gridMetrics.maxX - gridMetrics.minX;
+        const tH = gridMetrics.maxY - gridMetrics.minY;
+        const stepX = tW / 9; 
+        const stepY = tH / 14;
+
+        for(let r=0; r<ROWS; r++) {
+            for(let c=0; c<COLS; c++) {
+                if(gridData[r][c] === 0) {
+                    // It says empty. Let's verify.
+                    // Calculate center of this cell
+                    const cx = gridMetrics.minX + (c * stepX);
+                    const cy = gridMetrics.minY + (r * stepY);
+                    
+                    // Sample a small 10x10 box in center
+                    const s = 10;
+                    const sample = ctx.getImageData(cx - s/2, cy - s/2, s, s).data;
+                    let brightPixels = 0;
+                    
+                    for(let i=0; i<sample.length; i+=4) {
+                        const b = (sample[i]+sample[i+1]+sample[i+2])/3;
+                        if(b > thresh) brightPixels++;
+                    }
+
+                    // If we see more than a few bright pixels, but no blob was mapped...
+                    // It's a GHOST (Unread number).
+                    if(brightPixels > 5) {
+                        gridData[r][c] = -1; // BLOCK IT
+                    }
+                }
+            }
+        }
     }
 
     // --- STRATEGY ENGINE ---
@@ -312,7 +357,8 @@
                             if(blocked) break;
                         }
                         
-                        if(!blocked && sum === 10 && count > 0) {
+                        // Strict check: Sum=10, No Blocks, Count > 1 (can't match single number)
+                        if(!blocked && sum === 10 && count > 1) {
                             moves.push({
                                 r1, c1, r2, c2, count,
                                 area: (r2-r1+1)*(c2-c1+1)
@@ -331,42 +377,41 @@
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // Grid lines
+        // Calculate Steps for Drawing
+        let stepX=0, stepY=0;
         if(gridMetrics.maxX > 0) {
             const tW = gridMetrics.maxX - gridMetrics.minX;
             const tH = gridMetrics.maxY - gridMetrics.minY;
-            const stepX = tW / 9; 
-            const stepY = tH / 14;
-
-            ctx.strokeStyle = "rgba(0, 100, 255, 0.2)";
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            for(let c=0; c<=COLS; c++) {
-                const lx = gridMetrics.minX + (c * stepX) - (stepX/2);
-                ctx.moveTo(lx, 0); ctx.lineTo(lx, cvs.height);
-            }
-            for(let r=0; r<=ROWS; r++) {
-                const ly = gridMetrics.minY + (r * stepY) - (stepY/2);
-                ctx.moveTo(0, ly); ctx.lineTo(cvs.width, ly);
-            }
-            ctx.stroke();
+            stepX = tW / 9; 
+            stepY = tH / 14;
         }
 
-        blobs.forEach(b => {
-            if (gridData[b.gridR][b.gridC] === 0) {
-                ctx.fillStyle = "rgba(0,0,0,1)";
-                ctx.fillRect(b.x-2, b.y-2, b.w+4, b.h+4);
-                return;
-            }
-            
-            if (gridData[b.gridR][b.gridC] === -1) {
-                 ctx.strokeStyle = "red";
-                 ctx.lineWidth = 2;
-                 ctx.strokeRect(b.x, b.y, b.w, b.h);
-                 return;
-            }
+        // Draw Cell Statuses
+        for(let r=0; r<ROWS; r++) {
+            for(let c=0; c<COLS; c++) {
+                const val = gridData[r][c];
+                
+                // Calculate position for drawing non-blob cells (Ghosts/Blackouts)
+                const cx = gridMetrics.minX + (c * stepX);
+                const cy = gridMetrics.minY + (r * stepY);
+                const boxS = stepX * 0.6; 
 
-            if(b.isGarbage || !b.label) return;
+                if (val === 0) {
+                    // Confirmed Empty - Draw Blackout
+                    ctx.fillStyle = "rgba(0,0,0,0.85)";
+                    ctx.fillRect(cx - boxS/2, cy - boxS/2, boxS, boxS);
+                } else if (val === -1) {
+                    // Blocked/Ghost - Draw Red Box
+                    ctx.strokeStyle = "red";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(cx - boxS/2, cy - boxS/2, boxS, boxS);
+                }
+            }
+        }
+
+        // Draw Blobs (Detected Numbers)
+        blobs.forEach(b => {
+            if(gridData[b.gridR][b.gridC] <= 0) return; // Skip if blocked or empty
 
             const labelX = b.x - 2;
             const labelY = b.y - 12;
@@ -395,11 +440,6 @@
             btn.innerHTML = `MOVE DONE<br><span style="font-size:0.6em; font-weight:normal">${statusText}</span>`;
             document.getElementById('status').innerText = "Best Move Calculated.";
 
-            const tW = gridMetrics.maxX - gridMetrics.minX;
-            const tH = gridMetrics.maxY - gridMetrics.minY;
-            const stepX = tW / 9;
-            const stepY = tH / 14;
-            
             const x1 = gridMetrics.minX + (currentMove.c1 * stepX) - (stepX/2);
             const y1 = gridMetrics.minY + (currentMove.r1 * stepY) - (stepY/2);
             const x2 = gridMetrics.minX + (currentMove.c2 * stepX) + (stepX/2); 
@@ -432,7 +472,6 @@
     // --- HELPERS ---
     function detectBlobs(imgData, w, h, t) {
         const d=imgData.data, v=new Uint8Array(w*h), res=[];
-        // Optimized loop: step by 2 to prevent freezing on 4k screens
         for(let i=0; i<w*h; i+=2) {
             if(v[i])continue;
             if((d[i*4]+d[i*4+1]+d[i*4+2])/3 > t) {
@@ -445,7 +484,6 @@
                     });
                 }
                 const width=maxX-minX+1, height=maxY-minY+1;
-                // Strict size filter
                 if(width>3 && height>6 && width<60 && height<60) res.push({x:minX, y:minY, w:width, h:height});
             }
         }
@@ -473,19 +511,14 @@
         let g=Array(ROWS).fill().map(()=>Array(COLS).fill(0));
         if(!blobs.length) return g;
         
-        // Outlier filtering: Sort blobs by X and Y to find core grid area
-        // This prevents scrollbars on the far right from stretching the grid
         const xs = blobs.map(b=>b.x).sort((a,b)=>a-b);
         const ys = blobs.map(b=>b.y).sort((a,b)=>a-b);
-        // Take 5th and 95th percentile to determine bounds
         const qMinX = xs[Math.floor(xs.length*0.02)];
-        const qMaxX = xs[Math.floor(xs.length*0.98)] + 20; // +20 for blob width
+        const qMaxX = xs[Math.floor(xs.length*0.98)] + 20; 
         const qMinY = ys[Math.floor(ys.length*0.02)];
         const qMaxY = ys[Math.floor(ys.length*0.98)] + 20;
 
         let minX=9999, maxX=0, minY=9999, maxY=0;
-        
-        // Refine bounds based on filtered list
         blobs.forEach(b=>{
             if(b.x >= qMinX && b.x <= qMaxX && b.y >= qMinY && b.y <= qMaxY) {
                 if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
@@ -502,9 +535,8 @@
 
         blobs.forEach(b => {
             if(b.x < minX || b.x > maxX || b.y < minY || b.y > maxY) {
-                b.gridR = null; return; // Ignore outliers
+                b.gridR = null; return; 
             }
-
             const cx = b.x + b.w/2;
             const cy = b.y + b.h/2;
             const c = Math.round((cx - minX) / stepX);
