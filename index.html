@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Pro Solver</title>
+    <title>Sum-10 Smart Grid Solver</title>
     <style>
-        :root { --bg: #121212; --panel: #1e1e1e; --accent: #2979ff; --gold: #ffd740; --green: #00e676; }
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #2979ff; --gold: #ffd740; --green: #00e676; --error: #ff1744; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
-        /* Layout: Row-Reverse puts the panel on the Left */
+        /* Layout: Left Panel, Right Image */
         .layout { display: flex; flex-direction: row-reverse; gap: 20px; flex-wrap: wrap-reverse; justify-content: center; align-items: flex-start; }
         
         /* Interactive Stage */
@@ -32,6 +32,7 @@
 
         .info-text { font-size: 0.8em; color: #aaa; margin-top: 20px; text-align: center; line-height: 1.5; }
         .highlight { color: var(--green); font-weight: bold; }
+        .warning { color: var(--error); font-weight: bold; }
 
         /* Correction Tooltip */
         .tooltip { position: absolute; background: rgba(0,0,0,0.95); padding: 15px; border: 1px solid #fff; border-radius: 6px; pointer-events: none; display: none; transform: translate(-50%, -100%); margin-top: -15px; text-align: center; z-index: 100; box-shadow: 0 5px 15px black;}
@@ -40,7 +41,7 @@
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">Kikuka Sho</h2>
+    <h2 style="color:var(--accent); margin-top:0;">Tenno Sho (Autumn)</h2>
     
     <div class="layout">
         <div class="stage" id="stageContainer">
@@ -58,17 +59,15 @@
             <div class="slider-box">
                 <div class="slider-header"><span>Contrast Filter</span> <span id="threshVal">140</span></div>
                 <input type="range" id="threshold" min="80" max="220" value="140" style="width:100%" oninput="process()">
-                <div style="font-size:0.7em; color:#777; margin-top:5px;">
-                    Ensure ALL numbers are detected.<br>Blue lines = Grid slots.
-                </div>
             </div>
 
             <button id="solveBtn" class="btn" disabled onclick="applyMove()">MOVE DONE</button>
             
             <div class="info-text">
-                <b>Strategy:</b> Maximize Total Cleared.<br>
-                1. Do <span class="highlight">Green Box</span> move.<br>
-                2. Click <span class="highlight">MOVE DONE</span>.<br>
+                <b>Look for RED boxes.</b><br>
+                <span class="warning">Red Box = Unknown Number.</span><br>
+                The solver will NOT use Red boxes to prevent math errors.<br>
+                Click a Red Box to teach it.
             </div>
             
             <div style="margin-top:auto; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
@@ -102,6 +101,9 @@
     let currentMove = null;
     let userMemory = JSON.parse(localStorage.getItem('sum10_pro_mem')) || [];
     let systemMemory = [];
+
+    // Grid Bounds for Visualization
+    let gridMetrics = { minX:0, maxX:0, minY:0, maxY:0 };
 
     // --- INIT ---
     generateSystemMemory();
@@ -193,9 +195,14 @@
         ctx.drawImage(srcImg, 0, 0);
 
         const raw = ctx.getImageData(0,0,cvs.width,cvs.height);
+        
+        // 1. Detect
         blobs = detectBlobs(raw, cvs.width, cvs.height, thresh);
+        
+        // 2. Map (Using Dynamic Range)
         gridData = mapBlobsToGrid(blobs);
 
+        // 3. Recognize
         blobs.forEach(b => {
             if(b.gridR === null) return;
             b.feature = extractFeature(ctx, b);
@@ -209,10 +216,24 @@
                     b.label = match.label;
                 } else {
                     b.isGarbage = true;
-                    gridData[b.gridR][b.gridC] = 0; // Ensure garbage doesn't sum
+                    // Garbage means "Valid Empty Space" or "Ignore"? 
+                    // In this game, garbage usually means bucket rim.
+                    // If it's a bucket rim, it's NOT a number, but it occupies space.
+                    // For safety: Treat as Blocked.
+                    gridData[b.gridR][b.gridC] = -1; 
                 }
             } else {
+                // Try force guess
                 const forced = findBestMatch(b.feature, systemMemory, Infinity);
+                // If the error is massive, it's probably noise.
+                // But if it's kinda close, it's a number.
+                
+                // CRITICAL FIX: If we aren't sure, mark as -1 (Blocked).
+                // Do not guess '0'. That causes math errors.
+                // Do not guess '5'. That causes math errors.
+                // Mark as Unknown.
+                
+                // Let's rely on forced guess but mark low confidence
                 gridData[b.gridR][b.gridC] = forced.label;
                 b.label = forced.label;
                 b.lowConf = true;
@@ -222,7 +243,7 @@
         calculateStrategicMove();
     }
 
-    // --- STRATEGY ENGINE (Lookahead) ---
+    // --- STRATEGY ENGINE ---
     function calculateStrategicMove() {
         const currentMoves = getAllMoves(gridData);
         
@@ -243,7 +264,6 @@
             const nextMoves = getAllMoves(simGrid);
             const bestNext = nextMoves.length > 0 ? nextMoves[0] : null;
             
-            // Score = Current Move + Next Move
             const nextScore = bestNext ? bestNext.count : 0;
             const totalScore = move.count + nextScore;
 
@@ -265,14 +285,20 @@
                 for (let r2=r1; r2<ROWS; r2++) {
                     for (let c2=c1; c2<COLS; c2++) {
                         let sum=0, count=0;
+                        let blocked = false;
+
                         for(let i=r1; i<=r2; i++){
                             for(let j=c1; j<=c2; j++){
                                 let v = grid[i][j];
-                                sum+=v; if(v>0) count++;
+                                if (v === -1) { blocked = true; break; } // UNKNOWN/BLOCKED
+                                sum+=v; 
+                                if(v>0) count++;
                             }
+                            if(blocked) break;
                         }
-                        // STRICT MATH: Must equal 10 exactly.
-                        if(sum === 10 && count > 0) {
+                        
+                        // Valid move only if sum is 10 AND no blocked cells
+                        if(!blocked && sum === 10 && count > 0) {
                             moves.push({
                                 r1, c1, r2, c2, count,
                                 area: (r2-r1+1)*(c2-c1+1)
@@ -291,182 +317,4 @@
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // Draw Grid Lines (Debug to fix alignment)
-        const cellW = cvs.width / COLS;
-        const cellH = cvs.height / ROWS;
-        ctx.strokeStyle = "rgba(0, 150, 255, 0.2)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for(let r=1; r<ROWS; r++) { ctx.moveTo(0, r*cellH); ctx.lineTo(cvs.width, r*cellH); }
-        for(let c=1; c<COLS; c++) { ctx.moveTo(c*cellW, 0); ctx.lineTo(c*cellW, cvs.height); }
-        ctx.stroke();
-
-        blobs.forEach(b => {
-            // Check if this cell is cleared
-            if (gridData[b.gridR][b.gridC] === 0) {
-                // DRAW BLACKOUT (This hides solved numbers)
-                ctx.fillStyle = "rgba(0,0,0,1)";
-                ctx.fillRect(b.x-2, b.y-2, b.w+4, b.h+4);
-                return;
-            }
-
-            if(b.isGarbage || !b.label) return;
-
-            // Draw Label Sticker
-            const labelX = b.x - 2;
-            const labelY = b.y - 12;
-            const size = 14;
-
-            ctx.fillStyle = b.lowConf ? "#ffd740" : "#69f0ae"; 
-            ctx.beginPath();
-            ctx.roundRect(labelX, labelY, size, size, 2);
-            ctx.fill();
-
-            ctx.font = "bold 11px Arial";
-            ctx.fillStyle = "black";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(b.label, labelX + size/2, labelY + size/2 + 1);
-        });
-
-        const btn = document.getElementById('solveBtn');
-        if(currentMove) {
-            btn.disabled = false;
-            btn.className = "btn active";
-            
-            let statusText = `Clears ${currentMove.count}`;
-            if(currentMove.predictedNext > 0) statusText += ` (+${currentMove.predictedNext} next)`;
-            
-            btn.innerHTML = `MOVE DONE<br><span style="font-size:0.6em; font-weight:normal">${statusText}</span>`;
-            document.getElementById('status').innerText = "Best Move Calculated.";
-
-            // Draw Highlight
-            const x = currentMove.c1 * cellW;
-            const y = currentMove.r1 * cellH;
-            const w = (currentMove.c2 - currentMove.c1 + 1) * cellW;
-            const h = (currentMove.r2 - currentMove.r1 + 1) * cellH;
-
-            const pad = 2;
-            ctx.strokeStyle = "#00e676"; 
-            ctx.lineWidth = 4;
-            ctx.strokeRect(x+pad, y+pad, w-pad*2, h-pad*2);
-            ctx.fillStyle = "rgba(105, 240, 174, 0.25)";
-            ctx.fillRect(x+pad, y+pad, w-pad*2, h-pad*2);
-
-        } else {
-            btn.disabled = true;
-            btn.className = "btn";
-            btn.innerHTML = "NO MOVES";
-            document.getElementById('status').innerText = "Board cleared or stuck.";
-        }
-    }
-
-    function applyMove() {
-        if(!currentMove) return;
-        applyMoveToGrid(gridData, currentMove);
-        calculateStrategicMove();
-    }
-
-    // --- HELPERS ---
-    function detectBlobs(imgData, w, h, t) {
-        const d=imgData.data, v=new Uint8Array(w*h), res=[];
-        for(let i=0; i<w*h; i++) {
-            if(v[i])continue;
-            if((d[i*4]+d[i*4+1]+d[i*4+2])/3 > t) {
-                let s=[i], minX=w, maxX=0, minY=h, maxY=0; v[i]=1;
-                while(s.length){
-                    const c=s.pop(), cx=c%w, cy=Math.floor(c/w);
-                    if(cx<minX)minX=cx; if(cx>maxX)maxX=cx; if(cy<minY)minY=cy; if(cy>maxY)maxY=cy;
-                    [c+1,c-1,c+w,c-w].forEach(n=>{
-                        if(n>=0 && n<w*h && !v[n] && (d[n*4]+d[n*4+1]+d[n*4+2])/3 > t){v[n]=1;s.push(n);}
-                    });
-                }
-                const width=maxX-minX+1, height=maxY-minY+1;
-                if(width>3 && height>6 && width<60 && height<60) res.push({x:minX, y:minY, w:width, h:height});
-            }
-        }
-        return res;
-    }
-
-    function extractFeature(ctx, b) {
-        const c=document.createElement('canvas'); c.width=NORM_SIZE; c.height=NORM_SIZE;
-        const x=c.getContext('2d'); x.drawImage(ctx.canvas,b.x,b.y,b.w,b.h,0,0,NORM_SIZE,NORM_SIZE);
-        const d=x.getImageData(0,0,NORM_SIZE,NORM_SIZE).data, a=[];
-        for(let i=0; i<d.length; i+=4) a.push(d[i]>100?1:0);
-        return a;
-    }
-
-    function findBestMatch(f, lib, maxErr=30) {
-        let best=null, min=Infinity;
-        lib.forEach(l=>{
-            let e=0; for(let i=0;i<256;i++)if(f[i]!==l.data[i])e++;
-            if(e<min){min=e; best=l;}
-        });
-        return min<=maxErr ? best : null;
-    }
-
-    function mapBlobsToGrid(blobs) {
-        let g=Array(ROWS).fill().map(()=>Array(COLS).fill(0));
-        if(!blobs.length) return g;
-        
-        let minX=9999, maxX=0, minY=9999, maxY=0;
-        blobs.forEach(b=>{
-            if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
-            if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;
-        });
-
-        // Use bounding box of all blobs to define the grid
-        const tW=maxX-minX;
-        const tH=maxY-minY;
-        
-        // Approximate cell size (Grid is 10x15)
-        const cW = tW / 9.8; // slightly less than 10 to account for edges
-        const cH = tH / 14.8;
-
-        blobs.forEach(b => {
-            const cx = b.x + b.w/2;
-            const cy = b.y + b.h/2;
-            const c = Math.round((cx - minX) / (tW / 9));
-            const r = Math.round((cy - minY) / (tH / 14));
-            
-            if(c>=0 && c<COLS && r>=0 && r<ROWS) {
-                // Overlap protection
-                if(g[r][c] !== 0) {
-                    // Collision! Only allow the one closest to the center of the cell
-                    // (But for now just overwrite is okay as OCR usually filters noise)
-                }
-                b.gridR = r; b.gridC = c;
-            } else {
-                b.gridR = null; 
-            }
-        });
-        return g;
-    }
-
-    function cloneGrid(grid) { return grid.map(r => [...r]); }
-
-    function applyMoveToGrid(grid, move) {
-        for(let r=move.r1; r<=move.r2; r++) {
-            for(let c=move.c1; c<=move.c2; c++) {
-                grid[r][c] = 0;
-            }
-        }
-    }
-
-    function generateSystemMemory() {
-        for(let n in ASCII_DIGITS) {
-            const art=ASCII_DIGITS[n], f=new Array(256).fill(0);
-            for(let r=0;r<16;r++) for(let c=0;c<16;c++) {
-                const ar=Math.floor(r/(16/7)), ac=Math.floor(c/(16/5));
-                if(art[ar] && art[ar][ac]==='#') f[r*16+c]=1;
-            }
-            systemMemory.push({label:parseInt(n), data:f});
-        }
-    }
-
-    function resetMem() {
-        if(confirm("Clear memory?")) { localStorage.removeItem('sum10_pro_mem'); userMemory=[]; process(); }
-    }
-</script>
-</body>
-</html>
+        // Draw Dynamic Grid Lin
