@@ -3,134 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>azx mini game</title>
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <title>AZX minigame</title>
     <style>
-        :root { --bg: #1e1e24; --panel: #2b2b36; --accent: #00bcd4; --green: #4caf50; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0;}
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --green: #00c853; --warn: #ffab00; }
+        body { font-family: sans-serif; background: var(--bg); color: #fff; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         
-        h1 { margin: 10px 0; color: var(--accent); }
-        p { color: #aaa; margin-bottom: 20px; font-size: 0.9em; }
+        /* Layout */
+        .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; margin-top: 20px;}
         
-        .main-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
-
-        /* Left Side: The Image */
-        .image-panel { position: relative; border: 4px solid #444; border-radius: 4px; overflow: hidden;}
-        canvas { display: block; }
+        /* Left: Image */
+        .image-box { position: relative; border: 2px solid #333; display: none; }
         #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 
-        /* Right Side: The Grid & Controls */
-        .control-panel { background: var(--panel); padding: 20px; border-radius: 8px; width: 360px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        /* Right: Controls */
+        .controls { width: 320px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         
-        /* The Grid of Inputs */
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(10, 1fr); /* 10 Columns */
-            gap: 2px;
-            background: #000;
-            padding: 2px;
-            margin-bottom: 20px;
-            border: 1px solid #555;
-        }
-        .cell-input {
-            width: 100%;
-            height: 25px;
-            text-align: center;
-            background: #333;
-            color: white;
-            border: none;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .cell-input:focus { background: var(--accent); color: #000; outline: none; }
-        /* Highlight class for the best move */
-        .highlight-cell { background: var(--green) !important; color: white !important; }
-
-        /* Big Action Button */
-        .action-btn {
-            width: 100%;
-            padding: 15px;
-            font-size: 18px;
-            font-weight: bold;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            background: var(--green);
-            color: white;
-            transition: 0.2s;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .action-btn:hover { background: #43a047; transform: translateY(-2px); }
-        .action-btn:disabled { background: #555; transform: none; cursor: not-allowed; }
-        .btn-subtext { font-size: 12px; font-weight: normal; opacity: 0.8; }
-
-        .status-text { margin-top: 10px; text-align: center; color: #aaa; font-style: italic; min-height: 20px; }
+        .status { color: #aaa; margin-bottom: 15px; font-style: italic; min-height: 1.2em; }
         
-        .recalc-note { font-size: 0.8em; color: #777; margin-top: 10px; text-align: center; }
+        /* The Big Button */
+        .btn { width: 100%; padding: 15px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; margin-bottom: 10px; transition: 0.2s; }
+        .btn-green { background: var(--green); color: white; }
+        .btn-green:hover { background: #009624; transform: scale(1.02); }
+        .btn-green:disabled { background: #444; color: #888; cursor: not-allowed; transform: none; }
+        
+        .btn-small { padding: 5px 10px; font-size: 12px; background: #333; color: #aaa; margin-top: 20px; }
+
+        /* Training Modal */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: #222; padding: 30px; border-radius: 10px; text-align: center; width: 300px; border: 1px solid #444; }
+        .train-img { transform: scale(3); image-rendering: pixelated; margin: 20px 0; border: 1px solid #555; }
+        .train-input { font-size: 30px; width: 60px; text-align: center; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
+
+        /* Grid Display (Mini) */
+        .grid-mini { display: grid; grid-template-columns: repeat(10, 1fr); gap: 1px; background: #333; margin-top: 15px; border: 1px solid #444; }
+        .cell-mini { width: 100%; height: 20px; text-align: center; font-size: 10px; background: #222; border: none; color: #888; }
+        .cell-mini.active { color: white; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h1>Sum-10 Assistant</h1>
-    <p>1. Paste Screenshot (Ctrl+V) &nbsp;|&nbsp; 2. Verify Numbers &nbsp;|&nbsp; 3. Follow the Green Highlight</p>
+    <h2 style="color:var(--accent)">Doro</h2>
+    <div style="color:#777; font-size: 0.9em;">Paste Image (Ctrl+V) &bull; Teach numbers once &bull; Solve instantly</div>
 
-    <div class="main-layout">
-        
-        <!-- Visual Reference -->
-        <div class="image-panel" id="canvasWrapper" style="display:none">
+    <div class="container">
+        <!-- The Screenshot -->
+        <div class="image-box" id="imgBox">
             <canvas id="gameCanvas"></canvas>
             <canvas id="overlayCanvas"></canvas>
         </div>
 
-        <!-- Interactive Board -->
-        <div class="control-panel">
-            <div id="gridEditor" class="grid-container">
-                <!-- Inputs generated by JS -->
-            </div>
-
-            <button id="nextMoveBtn" class="action-btn" onclick="confirmMove()" disabled>
-                <span>MATCH DONE</span>
-                <span class="btn-subtext">Click to find next</span>
-            </button>
+        <!-- The Sidebar -->
+        <div class="controls">
+            <div id="status" class="status">Waiting for paste...</div>
             
-            <div id="status" class="status-text">Paste image to start...</div>
-            <div class="recalc-note">Tip: You can manually change numbers in the grid above if the scan was wrong.</div>
+            <button id="actionBtn" class="btn btn-green" disabled onclick="confirmMove()">
+                WAITING FOR IMAGE
+            </button>
+
+            <!-- Debug Grid to see what the computer "thinks" the numbers are -->
+            <div id="miniGrid" class="grid-mini"></div>
+
+            <button class="btn btn-small" onclick="clearMemory()">⚠ Reset Learned Numbers</button>
+        </div>
+    </div>
+
+    <!-- The "Teach Me" Popup -->
+    <div id="trainModal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0">Unknown Shape</h3>
+            <p>I don't know this number yet.<br>What is it?</p>
+            <canvas id="trainCanvas" class="train-img"></canvas>
+            <br><br>
+            <input type="number" id="trainInput" class="train-input" min="0" max="9" autofocus>
+            <br><br>
+            <button class="btn btn-green" onclick="submitTraining()">Save & Continue</button>
+            <br>
+            <small style="color:#777; cursor:pointer" onclick="skipTraining()">Skip/Blank</small>
         </div>
     </div>
 
 <script>
-    // --- CONFIG ---
-    const COLS = 10; 
+    // --- SETTINGS ---
+    const COLS = 10;
     const ROWS = 15;
-    // --------------
+    const THRESHOLD = 200; // Brightness threshold (0-255). Lower if numbers are dark.
+    // ----------------
 
+    // State
     let gridData = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-    let currentBestMove = null; // Stores {r1,c1, r2,c2}
-    
-    // Setup Grid UI immediately
-    const gridEditor = document.getElementById('gridEditor');
-    for(let r=0; r<ROWS; r++){
-        for(let c=0; c<COLS; c++){
-            let input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'cell-input';
-            input.id = `cell-${r}-${c}`;
-            input.maxLength = 1;
-            
-            // If user manually changes a number, update data and recalculate
-            input.oninput = (e) => {
-                let val = parseInt(e.target.value);
-                if(isNaN(val)) val = 0;
-                gridData[r][c] = val;
-                findAndShowBestMove(); // Live update
-            };
-            gridEditor.appendChild(input);
-        }
-    }
+    let cellSignatures = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+    let templateLibrary = JSON.parse(localStorage.getItem('sum10_templates')) || {};
+    let unknownQueue = []; // Queue for training
+    let currentBestMove = null;
 
-    // PASTE HANDLER
+    // --- PASTE HANDLER ---
     window.addEventListener('paste', e => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let item of items) {
@@ -143,75 +109,191 @@
         }
     });
 
-    async function processImage(img) {
-        document.getElementById('canvasWrapper').style.display = 'block';
-        document.getElementById('status').innerText = "Processing Image...";
-        document.getElementById('nextMoveBtn').disabled = true;
-
+    function processImage(img) {
+        document.getElementById('imgBox').style.display = 'block';
+        document.getElementById('status').innerText = "Analyzing pixels...";
+        
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const overlay = document.getElementById('overlayCanvas');
         
-        canvas.width = img.width;
-        canvas.height = img.height;
-        overlay.width = img.width;
-        overlay.height = img.height;
+        // Resize
+        canvas.width = img.width; canvas.height = img.height;
+        overlay.width = img.width; overlay.height = img.height;
         ctx.drawImage(img, 0, 0);
 
         const cellW = img.width / COLS;
         const cellH = img.height / ROWS;
 
-        const worker = await Tesseract.createWorker('eng');
-        await worker.setParameters({
-            tessedit_char_whitelist: '0123456789',
-            tessedit_pageseg_mode: Tesseract.PSM.SINGLE_CHAR,
-        });
+        // Reset Data
+        gridData = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+        cellSignatures = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+        unknownQueue = [];
 
-        // Scan Grid
-        let processed = 0;
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                // Crop
-                const cCanv = document.createElement('canvas');
-                cCanv.width = cellW; cCanv.height = cellH;
-                const cCtx = cCanv.getContext('2d');
+        // Build Mini Grid UI
+        const miniGrid = document.getElementById('miniGrid');
+        miniGrid.innerHTML = '';
+        
+        // 1. SCAN GRID & GENERATE SIGNATURES
+        for(let r=0; r<ROWS; r++){
+            for(let c=0; c<COLS; c++){
                 
-                const padX = cellW * 0.2;
+                // Create Input for Mini Grid
+                let cellInput = document.createElement('input');
+                cellInput.className = 'cell-mini';
+                cellInput.id = `mini-${r}-${c}`;
+                cellInput.readOnly = true;
+                miniGrid.appendChild(cellInput);
+
+                // Get Cell Image Data
+                // We crop 20% off edges to ignore grid lines/borders
+                const padX = cellW * 0.2; 
                 const padY = cellH * 0.2;
-                cCtx.drawImage(canvas, c*cellW+padX, r*cellH+padY, cellW-padX*2, cellH-padY*2, 0, 0, cellW, cellH);
+                
+                const imgData = ctx.getImageData(
+                    (c*cellW)+padX, (r*cellH)+padY, 
+                    cellW-(padX*2), cellH-(padY*2)
+                );
+                
+                // Create a "Signature" (Hash) of the image
+                // We turn it into High Contrast Black/White string
+                const sig = getSignature(imgData);
+                cellSignatures[r][c] = sig;
 
-                const { data: { text } } = await worker.recognize(cCanv);
-                let val = parseInt(text.trim()) || 0;
-                
-                // Update Data
-                gridData[r][c] = val;
-                
-                // Update UI
-                const input = document.getElementById(`cell-${r}-${c}`);
-                input.value = val === 0 ? '' : val;
-                
-                processed++;
-                if(processed % 10 === 0) document.getElementById('status').innerText = `Scanning: ${Math.round(processed/(ROWS*COLS)*100)}%`;
+                // Check Memory
+                if (templateLibrary[sig] !== undefined) {
+                    gridData[r][c] = templateLibrary[sig];
+                    cellInput.value = templateLibrary[sig] || '';
+                    if(templateLibrary[sig] > 0) cellInput.classList.add('active');
+                } else {
+                    // It's a non-empty looking cell but we don't know the number
+                    if(sig.length > 10) { // If sig length is tiny, it's likely a blank cell
+                        // Check if we already queued this exact shape
+                        if (!unknownQueue.find(q => q.sig === sig)) {
+                            unknownQueue.push({ sig, r, c, w: cellW, h: cellH });
+                        }
+                    } else {
+                        // It's blank
+                        templateLibrary[sig] = 0; 
+                    }
+                }
             }
         }
 
-        await worker.terminate();
-        document.getElementById('status').innerText = "Scan Complete. Highlighting best move...";
-        document.getElementById('nextMoveBtn').disabled = false;
-        
-        findAndShowBestMove();
+        // 2. HANDLE RESULTS
+        if (unknownQueue.length > 0) {
+            startTraining();
+        } else {
+            solveBoard();
+        }
     }
 
-    function findAndShowBestMove() {
-        // Reset highlights
-        document.querySelectorAll('.highlight-cell').forEach(el => el.classList.remove('highlight-cell'));
+    // --- IMAGE PROCESSING ---
+    function getSignature(imgData) {
+        let binaryString = "";
+        const d = imgData.data;
+        let hasContent = false;
+        
+        // Simple downsampling: Skip pixels to make hash smaller/faster
+        // and convert to 1 (Bright) or 0 (Dark)
+        for (let i = 0; i < d.length; i += 4 * 2) { // Step by 2 pixels
+            const r=d[i], g=d[i+1], b=d[i+2];
+            const bright = (r+g+b)/3;
+            if (bright > THRESHOLD) {
+                binaryString += "1";
+                hasContent = true;
+            } else {
+                binaryString += "0";
+            }
+        }
+        return hasContent ? binaryString : "empty";
+    }
+
+    // --- TRAINING MODE ---
+    let trainingIndex = 0;
+    
+    function startTraining() {
+        trainingIndex = 0;
+        showTrainingModal();
+    }
+
+    function showTrainingModal() {
+        if (trainingIndex >= unknownQueue.length) {
+            // Done training
+            document.getElementById('trainModal').style.display = 'none';
+            localStorage.setItem('sum10_templates', JSON.stringify(templateLibrary));
+            
+            // Refill grid data based on new knowledge
+            for(let r=0; r<ROWS; r++){
+                for(let c=0; c<COLS; c++){
+                    const sig = cellSignatures[r][c];
+                    if(templateLibrary[sig] !== undefined) {
+                        gridData[r][c] = templateLibrary[sig];
+                        const input = document.getElementById(`mini-${r}-${c}`);
+                        input.value = templateLibrary[sig] || '';
+                        if(templateLibrary[sig]) input.classList.add('active');
+                    }
+                }
+            }
+            solveBoard();
+            return;
+        }
+
+        const item = unknownQueue[trainingIndex];
+        const modal = document.getElementById('trainModal');
+        const canvas = document.getElementById('trainCanvas');
+        const input = document.getElementById('trainInput');
+        
+        modal.style.display = 'flex';
+        
+        // Draw the unknown shape onto the modal canvas
+        canvas.width = item.w;
+        canvas.height = item.h;
+        const mainCtx = document.getElementById('gameCanvas').getContext('2d');
+        // We grab from main canvas again to show user
+        // Note: we grab full cell for visibility
+        canvas.getContext('2d').drawImage(
+            document.getElementById('gameCanvas'),
+            item.c * item.w, item.r * item.h, item.w, item.h,
+            0, 0, item.w, item.h
+        );
+        
+        input.value = '';
+        input.focus();
+    }
+
+    function submitTraining() {
+        const val = parseInt(document.getElementById('trainInput').value);
+        if (isNaN(val)) return; // Must be number
+        
+        const currentSig = unknownQueue[trainingIndex].sig;
+        templateLibrary[currentSig] = val;
+        
+        trainingIndex++;
+        showTrainingModal();
+    }
+
+    function skipTraining() {
+        const currentSig = unknownQueue[trainingIndex].sig;
+        templateLibrary[currentSig] = 0; // Mark as blank/garbage
+        trainingIndex++;
+        showTrainingModal();
+    }
+    
+    // Enter key support for modal
+    document.getElementById('trainInput').addEventListener("keypress", function(event) {
+        if (event.key === "Enter") submitTraining();
+    });
+
+    // --- SOLVER LOGIC ---
+    function solveBoard() {
         const ctx = document.getElementById('overlayCanvas').getContext('2d');
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
+        
         let bestMatch = null;
-        let bestScore = -1; // Higher is better
+        let bestScore = -1;
 
-        // 1. Find all matches
+        // Find greedy best match
         for (let r1 = 0; r1 < ROWS; r1++) {
             for (let c1 = 0; c1 < COLS; c1++) {
                 for (let r2 = r1; r2 < ROWS; r2++) {
@@ -220,7 +302,6 @@
                         let sum = 0;
                         let count = 0;
                         
-                        // Sum rectangle
                         for(let i=r1; i<=r2; i++){
                             for(let j=c1; j<=c2; j++){
                                 let v = gridData[i][j];
@@ -230,10 +311,8 @@
                         }
 
                         if(sum === 10 && count > 0) {
-                            // SCORING LOGIC
-                            // We want High Count (clearing 5 numbers is better than 2)
-                            // Secondary is Area (larger area might clear distinct blanks)
-                            let score = (count * 1000) + ((r2-r1+1)*(c2-c1+1));
+                            // Score: Count is King. Break ties with Area.
+                            let score = (count * 100) + ((r2-r1+1)*(c2-c1+1));
                             
                             if(score > bestScore) {
                                 bestScore = score;
@@ -246,26 +325,21 @@
         }
 
         currentBestMove = bestMatch;
+        const btn = document.getElementById('actionBtn');
 
         if (bestMatch) {
             highlightMove(bestMatch);
-            document.getElementById('status').innerText = `Best Move: Clears ${bestMatch.count} numbers!`;
-            document.getElementById('nextMoveBtn').disabled = false;
+            document.getElementById('status').innerText = `Ready! Best move clears ${bestMatch.count} numbers.`;
+            btn.innerHTML = `MATCH DONE<br><span style='font-size:0.7em; font-weight:normal'>Click to find next</span>`;
+            btn.disabled = false;
         } else {
-            document.getElementById('status').innerText = "No moves left that sum to 10.";
-            document.getElementById('nextMoveBtn').disabled = true;
+            document.getElementById('status').innerText = "No moves left.";
+            btn.innerText = "NO MOVES FOUND";
+            btn.disabled = true;
         }
     }
 
     function highlightMove(m) {
-        // 1. Highlight Inputs
-        for(let r=m.r1; r<=m.r2; r++){
-            for(let c=m.c1; c<=m.c2; c++){
-                document.getElementById(`cell-${r}-${c}`).classList.add('highlight-cell');
-            }
-        }
-
-        // 2. Draw on Overlay
         const canvas = document.getElementById('overlayCanvas');
         const ctx = canvas.getContext('2d');
         const cellW = canvas.width / COLS;
@@ -276,7 +350,7 @@
         const w = (m.c2 - m.c1 + 1) * cellW;
         const h = (m.r2 - m.r1 + 1) * cellH;
 
-        ctx.fillStyle = "rgba(76, 175, 80, 0.5)";
+        ctx.fillStyle = "rgba(0, 255, 0, 0.4)";
         ctx.strokeStyle = "#00ff00";
         ctx.lineWidth = 4;
         ctx.fillRect(x, y, w, h);
@@ -285,18 +359,27 @@
 
     function confirmMove() {
         if(!currentBestMove) return;
-
-        // Clear data in grid
+        
+        // Clear cells in data
         const m = currentBestMove;
         for(let r=m.r1; r<=m.r2; r++){
             for(let c=m.c1; c<=m.c2; c++){
                 gridData[r][c] = 0;
-                document.getElementById(`cell-${r}-${c}`).value = "";
+                document.getElementById(`mini-${r}-${c}`).value = '';
+                document.getElementById(`mini-${r}-${c}`).classList.remove('active');
             }
         }
-
+        
         // Find next
-        findAndShowBestMove();
+        solveBoard();
+    }
+
+    function clearMemory() {
+        if(confirm("Are you sure? You will have to teach it the numbers again.")) {
+            localStorage.removeItem('sum10_templates');
+            templateLibrary = {};
+            location.reload();
+        }
     }
 </script>
 </body>
