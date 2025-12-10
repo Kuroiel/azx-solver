@@ -3,32 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Grid Solver</title>
-    <!-- Load Tesseract.js for OCR -->
+    <title>Sum-10 Optimizer (10x16)</title>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <style>
-        body { font-family: sans-serif; background: #222; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        h1 { margin-bottom: 10px; }
-        .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
-        .canvas-wrapper { position: relative; border: 2px solid #555; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a1a; color: #eee; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        h1 { margin: 0 0 10px 0; color: #4db8ff; }
+        p { color: #aaa; margin-bottom: 20px; font-size: 0.9em; }
+        
+        .container { display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+        
+        /* The Image Area */
+        .canvas-wrapper { position: relative; border: 3px solid #444; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         canvas { display: block; max-width: 100%; }
         #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
         
-        .controls { width: 300px; display: flex; flex-direction: column; gap: 10px; }
-        .grid-editor { display: grid; grid-template-columns: repeat(15, 1fr); gap: 2px; margin-top: 20px; }
-        .grid-editor input { width: 100%; text-align: center; background: #333; color: white; border: 1px solid #444; font-size: 10px; padding: 2px 0; }
+        /* The Controls Area */
+        .controls { width: 340px; background: #2a2a2a; padding: 20px; border-radius: 8px; }
         
-        button { padding: 10px; cursor: pointer; background: #007bff; color: white; border: none; font-size: 16px; border-radius: 4px; }
-        button:hover { background: #0056b3; }
-        button:disabled { background: #555; cursor: not-allowed; }
+        .grid-editor { 
+            display: grid; 
+            grid-template-columns: repeat(16, 1fr); /* 16 Cols */
+            gap: 1px; 
+            margin-top: 15px; 
+            background: #444;
+            border: 1px solid #555;
+        }
+        .grid-editor input { 
+            width: 100%; 
+            text-align: center; 
+            background: #222; 
+            color: #fff; 
+            border: none; 
+            font-size: 10px; 
+            padding: 4px 0; 
+            font-family: monospace;
+        }
+        .grid-editor input:focus { background: #555; outline: none; }
         
-        .status { margin-top: 10px; font-style: italic; color: #aaa; }
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+        button { flex: 1; padding: 12px; cursor: pointer; border: none; font-weight: bold; border-radius: 4px; transition: 0.2s; }
+        #solveBtn { background: #28a745; color: white; }
+        #solveBtn:hover { background: #218838; }
+        #solveBtn:disabled { background: #555; cursor: not-allowed; }
+        
+        .status { margin-top: 15px; font-size: 0.9em; color: #ffd700; min-height: 1.2em; }
+        
+        .legend { margin-top: 20px; font-size: 0.8em; color: #888; }
+        .legend span { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: middle; }
     </style>
 </head>
 <body>
 
-    <h1>Sum-10 Solver</h1>
-    <p>Paste your screenshot (Ctrl+V) anywhere on this page. Try to crop just the grid.</p>
+    <h1>Sum-10 Optimizer</h1>
+    <p>Paste Screenshot (Ctrl+V). Grid size: 10x16.</p>
 
     <div class="container">
         <!-- Image Display Area -->
@@ -40,16 +67,27 @@
         <!-- Controls -->
         <div class="controls">
             <div id="status" class="status">Waiting for image...</div>
-            <button id="solveBtn" onclick="solveGrid()" disabled>Solve</button>
             
-            <h3>Verify Numbers:</h3>
+            <div class="btn-group">
+                <button id="solveBtn" onclick="solveGrid()" disabled>CALCULATE BEST MOVES</button>
+            </div>
+
+            <div class="legend">
+                <div><span style="background:rgba(0, 255, 0, 0.6)"></span>Green: Best Moves (3+ numbers)</div>
+                <div><span style="background:rgba(255, 165, 0, 0.5)"></span>Orange: Simple Moves (2 numbers)</div>
+            </div>
+            
+            <h3 style="margin-top:20px; font-size:1em;">Manual Correction:</h3>
             <div id="gridEditor" class="grid-editor"></div>
         </div>
     </div>
 
 <script>
-    const ROWS = 9;
-    const COLS = 15;
+    // --- CONFIGURATION ---
+    const ROWS = 10;
+    const COLS = 16;
+    // ---------------------
+
     let gridData = Array(ROWS).fill().map(() => Array(COLS).fill(0));
     
     // Paste Event Listener
@@ -66,7 +104,7 @@
     });
 
     async function processImage(img) {
-        document.getElementById('status').innerText = "Processing image...";
+        document.getElementById('status').innerText = "Initializing Processor...";
         document.getElementById('canvasContainer').style.display = "block";
 
         const canvas = document.getElementById('gameCanvas');
@@ -81,43 +119,38 @@
         
         ctx.drawImage(img, 0, 0);
 
-        // Calculate cell size
         const cellW = img.width / COLS;
         const cellH = img.height / ROWS;
 
-        document.getElementById('status').innerText = "Reading numbers (this takes a moment)...";
+        document.getElementById('status').innerText = "Scanning Grid... (Please wait)";
         document.getElementById('solveBtn').disabled = true;
-
-        // Perform OCR
-        // We will try to read the whole image and hope Tesseract respects lines, 
-        // OR we chop it up. Chopping is more accurate for grids.
         
+        // Setup Tesseract
         const worker = await Tesseract.createWorker('eng');
         await worker.setParameters({
-            tessedit_char_whitelist: '0123456789', // Only look for numbers
-            tessedit_pageseg_mode: Tesseract.PSM.SINGLE_CHAR, // Treat as single characters if we loop
+            tessedit_char_whitelist: '0123456789',
+            tessedit_pageseg_mode: Tesseract.PSM.SINGLE_CHAR,
         });
 
-        // Loop through grid and read specific spots
-        // Note: Doing 135 individual OCR calls is slow. 
-        // For a quick helper, we'll try a hybrid: Assume perfect grid, extract image data.
-        
+        // Setup Editor UI
+        const editor = document.getElementById('gridEditor');
+        editor.innerHTML = ''; 
         let processedCount = 0;
         const total = ROWS * COLS;
-        const editor = document.getElementById('gridEditor');
-        editor.innerHTML = ''; // Clear previous
 
+        // --- SCANNING LOOP ---
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
-                // Crop individual cell
+                
+                // Prepare small canvas for this specific cell
                 const cellCanvas = document.createElement('canvas');
                 cellCanvas.width = cellW;
                 cellCanvas.height = cellH;
                 const cCtx = cellCanvas.getContext('2d');
                 
-                // Add a little padding to remove grid lines
-                const padX = cellW * 0.15;
-                const padY = cellH * 0.15;
+                // Crop with padding to ignore grid lines
+                const padX = cellW * 0.20; 
+                const padY = cellH * 0.20;
                 
                 cCtx.drawImage(canvas, 
                     (c * cellW) + padX, (r * cellH) + padY, 
@@ -125,62 +158,116 @@
                     0, 0, cellW, cellH
                 );
 
-                // Create input for editor
+                // Create Input Field
                 const input = document.createElement('input');
                 input.id = `cell-${r}-${c}`;
                 input.type = "text";
-                input.onchange = () => { gridData[r][c] = parseInt(input.value) || 0; };
+                // Update gridData if user types manually
+                input.oninput = function() { 
+                    let val = parseInt(this.value);
+                    if(isNaN(val)) val = 0;
+                    gridData[r][c] = val; 
+                };
                 editor.appendChild(input);
 
-                // Run OCR on this small chunk
+                // Perform OCR
                 const { data: { text } } = await worker.recognize(cellCanvas);
-                const num = parseInt(text.trim()) || 0; // Default to 0 (blank) if failed
+                
+                // Parse result
+                let num = parseInt(text.trim());
+                if(isNaN(num)) num = 0; // Blank or error becomes 0
                 
                 gridData[r][c] = num;
                 input.value = num === 0 ? '' : num;
 
+                // Update UI status every 5 cells
                 processedCount++;
                 if(processedCount % 5 === 0) {
-                    document.getElementById('status').innerText = `Reading... ${Math.round((processedCount/total)*100)}%`;
+                    const percent = Math.round((processedCount/total)*100);
+                    document.getElementById('status').innerText = `Scanning: ${percent}%`;
                 }
             }
         }
         
         await worker.terminate();
-        document.getElementById('status').innerText = "Ready! Check numbers below and click Solve.";
+        document.getElementById('status').innerText = "Scan Complete. Verify numbers & Solve.";
         document.getElementById('solveBtn').disabled = false;
     }
 
     function solveGrid() {
-        const matches = [];
+        let allMatches = [];
         
-        // Brute force all rectangles
+        // 1. FIND ALL POSSIBLE VALID RECTANGLES
         for (let r1 = 0; r1 < ROWS; r1++) {
             for (let c1 = 0; c1 < COLS; c1++) {
+                // Expanding to bottom-right
                 for (let r2 = r1; r2 < ROWS; r2++) {
                     for (let c2 = c1; c2 < COLS; c2++) {
                         
                         let sum = 0;
-                        let cellCount = 0;
+                        let cellCount = 0; // Non-zero numbers involved
                         
-                        // Sum the rectangle
                         for (let i = r1; i <= r2; i++) {
                             for (let j = c1; j <= c2; j++) {
-                                sum += gridData[i][j];
-                                if(gridData[i][j] > 0) cellCount++;
+                                let val = gridData[i][j];
+                                sum += val;
+                                if(val > 0) cellCount++;
                             }
                         }
 
+                        // VALID MATCH FOUND
                         if (sum === 10 && cellCount > 0) {
-                            // Calculate area score (bigger is better)
-                            matches.push({ r1, c1, r2, c2, area: (r2-r1+1)*(c2-c1+1), cellCount });
+                            allMatches.push({ 
+                                r1, c1, r2, c2, 
+                                cellCount, 
+                                area: (r2-r1+1)*(c2-c1+1) 
+                            });
                         }
                     }
                 }
             }
         }
 
-        drawSolutions(matches);
+        // 2. SORT MATCHES TO FIND "THE BEST"
+        // Priority 1: High Count (3+ numbers is better than 2)
+        // Priority 2: Area (Compact is usually easier to read, but let's go for larger area to clear more blanks)
+        allMatches.sort((a, b) => {
+            if (b.cellCount !== a.cellCount) return b.cellCount - a.cellCount;
+            return b.area - a.area;
+        });
+
+        // 3. SELECT NON-OVERLAPPING SET (Greedy Algorithm)
+        // We want to give the user a plan to clear as much as possible in one go.
+        let finalMoves = [];
+        let occupied = new Set(); // Stores "r,c" keys
+
+        for (let m of allMatches) {
+            let clash = false;
+            
+            // Check if this match overlaps with a move we already picked
+            for (let i = m.r1; i <= m.r2; i++) {
+                for (let j = m.c1; j <= m.c2; j++) {
+                    if (occupied.has(`${i},${j}`)) {
+                        clash = true;
+                        break;
+                    }
+                }
+                if(clash) break;
+            }
+
+            // If no clash, add to our battle plan
+            if (!clash) {
+                finalMoves.push(m);
+                // Mark cells as occupied
+                for (let i = m.r1; i <= m.r2; i++) {
+                    for (let j = m.c1; j <= m.c2; j++) {
+                        occupied.add(`${i},${j}`);
+                    }
+                }
+            }
+        }
+
+        drawSolutions(finalMoves);
     }
 
     function drawSolutions(matches) {
@@ -191,41 +278,47 @@
         const cellW = width / COLS;
         const cellH = height / ROWS;
 
+        // Clear previous drawings
         ctx.clearRect(0, 0, width, height);
 
-        // Sort matches by area (largest first) to draw them first
-        // Or strictly show the "Best" ones. 
-        // Let's filter to only show the top 10 largest matches to avoid clutter
-        matches.sort((a, b) => b.cellCount - a.cellCount);
-        const topMatches = matches.slice(0, 15); // Show top 15
-
-        if (topMatches.length === 0) {
-            alert("No matches found that equal 10!");
+        if (matches.length === 0) {
+            document.getElementById('status').innerText = "No matches found!";
             return;
         }
 
-        topMatches.forEach((m, index) => {
+        let totalCleared = 0;
+
+        matches.forEach((m, index) => {
+            totalCleared += m.cellCount;
+
             const x = m.c1 * cellW;
             const y = m.r1 * cellH;
             const w = (m.c2 - m.c1 + 1) * cellW;
             const h = (m.r2 - m.r1 + 1) * cellH;
 
-            // Cycle colors
-            const colors = ['rgba(0, 255, 0, 0.4)', 'rgba(255, 255, 0, 0.4)', 'rgba(0, 255, 255, 0.4)'];
-            ctx.fillStyle = colors[index % colors.length];
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 2;
-
+            // Color Coding
+            // Green for High Score moves (3+ numbers), Orange for basic moves
+            if (m.cellCount >= 3) {
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.4)'; // Green
+                ctx.strokeStyle = '#00ff00';
+            } else {
+                ctx.fillStyle = 'rgba(255, 165, 0, 0.5)'; // Orange
+                ctx.strokeStyle = '#ffa500';
+            }
+            
+            ctx.lineWidth = 3;
             ctx.fillRect(x, y, w, h);
             ctx.strokeRect(x, y, w, h);
             
-            // Draw order number
+            // Draw Number Label
             ctx.fillStyle = "white";
-            ctx.font = "bold 20px Arial";
-            ctx.fillText(`#${index+1}`, x + 5, y + 20);
+            ctx.font = "bold 16px sans-serif";
+            ctx.shadowColor="black";
+            ctx.shadowBlur=4;
+            ctx.fillText(index + 1, x + 5, y + 20);
         });
 
-        document.getElementById('status').innerText = `Found ${matches.length} matches. Showing top ${topMatches.length}.`;
+        document.getElementById('status').innerText = `Found ${matches.length} moves. Clears ${totalCleared} numbers!`;
     }
 </script>
 </body>
