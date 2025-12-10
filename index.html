@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Focus Solver (High Contrast)</title>
+    <title>Sum-10 Strategic Solver</title>
     <style>
-        :root { --bg: #121212; --panel: #1e1e1e; --accent: #40c4ff; --gold: #ffd740; --green: #69f0ae; }
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --gold: #ffd740; --green: #69f0ae; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
-        .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+        /* Layout: Row-Reverse puts the panel on the Left, Stage on Right */
+        .layout { display: flex; flex-direction: row-reverse; gap: 20px; flex-wrap: wrap-reverse; justify-content: center; align-items: flex-start; }
         
         /* Interactive Stage */
         .stage { position: relative; border: 2px solid #444; background: #000; cursor: crosshair; }
@@ -16,11 +17,11 @@
         #overlayCanvas { position: absolute; top: 0; left: 0; }
         
         /* Controls */
-        .panel { width: 320px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); }
-        .status { font-weight: bold; margin-bottom: 15px; color: var(--accent); min-height: 1.2em; font-size: 0.9em; }
+        .panel { width: 300px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
+        .status { font-weight: bold; margin-bottom: 15px; color: var(--accent); min-height: 1.2em; font-size: 0.9em; border-bottom: 1px solid #333; padding-bottom: 10px; }
         
         .btn { width: 100%; padding: 20px; border: none; border-radius: 4px; font-weight: bold; font-size: 18px; cursor: pointer; background: #333; color: #777; transition: 0.1s; margin-top: 10px;}
-        .btn.active { background: var(--green); color: #000; box-shadow: 0 0 15px rgba(105, 240, 174, 0.4); animation: pulse 2s infinite; }
+        .btn.active { background: var(--green); color: #000; box-shadow: 0 0 15px rgba(105, 240, 174, 0.4); animation: pulse 1.5s infinite; }
         .btn:active { transform: translateY(2px); }
         .btn:disabled { opacity: 0.3; cursor: not-allowed; animation: none; }
 
@@ -40,7 +41,7 @@
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">takarazuka kinen</h2>
+    <h2 style="color:var(--accent); margin-top:0;">sprinters stakes</h2>
     
     <div class="layout">
         <div class="stage" id="stageContainer">
@@ -64,13 +65,13 @@
             <button id="solveBtn" class="btn" disabled onclick="applyMove()">MOVE DONE</button>
             
             <div class="info-text">
-                1. Perform the <span class="highlight">Green Boxed</span> move.<br>
+                Strategy: <b>Look-Ahead AI</b><br>
+                It may pick a smaller move now to unlock a massive move next.<br><br>
+                1. Do <span class="highlight">Green Box</span> move.<br>
                 2. Click <span class="highlight">MOVE DONE</span>.<br>
-                3. Repeat.<br><br>
-                <span style="color:#888; font-size:0.9em">Click any <span style="background:#69f0ae; color:black; padding:0 2px; border-radius:2px;">#</span> tag to fix it.</span>
             </div>
             
-            <div style="margin-top:20px; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
+            <div style="margin-top:auto; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
                 [ Clear Learned Data ]
             </div>
         </div>
@@ -130,8 +131,6 @@
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
-        // Find clicked blob. 
-        // Expanded click area slightly to catch the new offset labels
         const clicked = blobs.find(b => 
             x >= b.x - 5 && x <= b.x + b.w + 5 && 
             y >= b.y - 15 && y <= b.y + b.h + 5
@@ -219,11 +218,59 @@
             }
         });
 
-        solveNext();
+        calculateStrategicMove();
     }
 
-    function solveNext() {
-        let allMoves = [];
+    // --- AI STRATEGY ENGINE (Depth-1 Lookahead) ---
+    function calculateStrategicMove() {
+        // 1. Get all currently available moves
+        const currentMoves = getAllMoves(gridData);
+        
+        if (currentMoves.length === 0) {
+            currentMove = null;
+            drawScene();
+            return;
+        }
+
+        // Optimization: If there are too many moves, only lookahead for the top X largest ones
+        // to prevent browser freeze.
+        const candidates = currentMoves.slice(0, 15); // Check top 15 moves deeply
+
+        let bestStrategy = null;
+        let maxTotalPoints = -1;
+
+        // 2. Simulate each candidate move
+        for (let move of candidates) {
+            // A. Create a hypothetical board state
+            const simGrid = cloneGrid(gridData);
+            
+            // B. Apply this move to simulation
+            applyMoveToGrid(simGrid, move);
+            
+            // C. Find the best move on the NEW board (The "Next Step")
+            const nextMoves = getAllMoves(simGrid);
+            const bestNext = nextMoves.length > 0 ? nextMoves[0] : null;
+            
+            // D. Calculate Score
+            // Score = Current Move Count + (Next Move Count * 0.9)
+            // We weigh the next move slightly less to prioritize immediate points slightly
+            const nextScore = bestNext ? bestNext.count : 0;
+            const totalScore = move.count + nextScore;
+
+            if (totalScore > maxTotalPoints) {
+                maxTotalPoints = totalScore;
+                bestStrategy = move;
+                // Store the predicted next score for UI logic if needed
+                bestStrategy.predictedNext = nextScore;
+            }
+        }
+
+        currentMove = bestStrategy;
+        drawScene();
+    }
+
+    function getAllMoves(grid) {
+        let moves = [];
         for (let r1=0; r1<ROWS; r1++) {
             for (let c1=0; c1<COLS; c1++) {
                 for (let r2=r1; r2<ROWS; r2++) {
@@ -231,12 +278,12 @@
                         let sum=0, count=0;
                         for(let i=r1; i<=r2; i++){
                             for(let j=c1; j<=c2; j++){
-                                let v = gridData[i][j];
+                                let v = grid[i][j];
                                 sum+=v; if(v>0) count++;
                             }
                         }
                         if(sum === 10 && count > 0) {
-                            allMoves.push({
+                            moves.push({
                                 r1, c1, r2, c2, count,
                                 area: (r2-r1+1)*(c2-c1+1)
                             });
@@ -245,13 +292,20 @@
                 }
             }
         }
-        allMoves.sort((a, b) => {
-            if (b.count !== a.count) return b.count - a.count;
-            return b.area - a.area;
-        });
+        // Sort by Count Descending
+        return moves.sort((a, b) => b.count - a.count);
+    }
 
-        currentMove = allMoves.length > 0 ? allMoves[0] : null;
-        drawScene();
+    function cloneGrid(grid) {
+        return grid.map(row => [...row]);
+    }
+
+    function applyMoveToGrid(grid, move) {
+        for(let r=move.r1; r<=move.r2; r++) {
+            for(let c=move.c1; c<=move.c2; c++) {
+                grid[r][c] = 0;
+            }
+        }
     }
 
     // --- DRAWING ---
@@ -260,30 +314,28 @@
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // 1. Draw Labels
+        // 1. Draw Labels (or Blackout if cleared)
         blobs.forEach(b => {
             if(b.isGarbage || !b.label) return;
             
-            // Draw Bounding Box (Faint Dashed) to show what pixels are read
-            ctx.setLineDash([2, 2]);
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-            ctx.lineWidth = 1;
-            ctx.strokeRect(b.x, b.y, b.w, b.h);
-            ctx.setLineDash([]);
+            // Check if this cell is cleared in gridData
+            if (gridData[b.gridR][b.gridC] === 0) {
+                // DRAW BLACKOUT
+                ctx.fillStyle = "black";
+                ctx.fillRect(b.x, b.y, b.w, b.h);
+                return; // Stop drawing label
+            }
 
-            // Draw "Sticker" Label
-            // Offset it slightly Up and Left so it doesn't cover the number
+            // Draw Label
             const labelX = b.x - 2;
             const labelY = b.y - 12;
             const size = 14;
 
-            // Sticker Background
-            ctx.fillStyle = b.lowConf ? "#ffd740" : "#69f0ae"; // Yellow or Green
+            ctx.fillStyle = b.lowConf ? "#ffd740" : "#69f0ae"; 
             ctx.beginPath();
             ctx.roundRect(labelX, labelY, size, size, 2);
             ctx.fill();
 
-            // Text
             ctx.font = "bold 11px Arial";
             ctx.fillStyle = "black";
             ctx.textAlign = "center";
@@ -296,8 +348,14 @@
         if(currentMove) {
             btn.disabled = false;
             btn.className = "btn active";
-            btn.innerHTML = `MOVE DONE<br><span style="font-size:0.6em; font-weight:normal">Clears ${currentMove.count} numbers</span>`;
-            document.getElementById('status').innerText = `Best Move Found! Clears ${currentMove.count}.`;
+            
+            let statusText = `Best Move: Clears ${currentMove.count}.`;
+            if(currentMove.predictedNext > 0) {
+                statusText += ` (Unlocks match of ${currentMove.predictedNext})`;
+            }
+            
+            btn.innerHTML = `MOVE DONE<br><span style="font-size:0.6em; font-weight:normal">${statusText}</span>`;
+            document.getElementById('status').innerText = statusText;
 
             let minX=9999, maxX=0, minY=9999, maxY=0;
             let found = false;
@@ -330,16 +388,8 @@
 
     function applyMove() {
         if(!currentMove) return;
-        for(let r=currentMove.r1; r<=currentMove.r2; r++) {
-            for(let c=currentMove.c1; c<=currentMove.c2; c++) {
-                gridData[r][c] = 0;
-            }
-        }
-        blobs = blobs.filter(b => 
-            !(b.gridR >= currentMove.r1 && b.gridR <= currentMove.r2 && 
-              b.gridC >= currentMove.c1 && b.gridC <= currentMove.c2)
-        );
-        solveNext();
+        applyMoveToGrid(gridData, currentMove);
+        calculateStrategicMove();
     }
 
     // --- UTILS ---
