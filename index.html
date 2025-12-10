@@ -3,93 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Smart Auto-Suggest</title>
+    <title>Sum-10 "No Nag" Solver</title>
     <style>
-        :root { --bg: #111; --panel: #1a1a1a; --primary: #0d47a1; --success: #00c853; --warn: #ffd600; }
-        body { background: var(--bg); color: #ddd; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00bcd4; --green: #4caf50; --error: #f44336; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
-        .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+        .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
         
-        /* The Game Board View */
-        .stage { position: relative; border: 2px solid #333; background: #000; display: flex; justify-content: center; align-items: center; min-width: 300px; min-height: 200px;}
+        /* Interactive Stage */
+        .stage { position: relative; border: 2px solid #444; background: #000; cursor: crosshair; }
         canvas { display: block; image-rendering: pixelated; }
-        #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
-        .placeholder { color: #555; pointer-events: none; }
-
+        #overlayCanvas { position: absolute; top: 0; left: 0; }
+        
         /* Controls */
-        .panel { width: 320px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .status { font-weight: bold; margin-bottom: 10px; color: var(--warn); min-height: 1.2em; }
+        .panel { width: 320px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); }
+        .status { font-weight: bold; margin-bottom: 15px; color: var(--accent); min-height: 1.2em; font-size: 0.9em; }
         
-        .btn { width: 100%; padding: 12px; margin-top: 10px; border: none; font-weight: bold; cursor: pointer; color: white; background: #333; border-radius: 4px; transition: 0.1s;}
-        .btn-solve { background: var(--success); color: #000; }
-        .btn-solve:hover { transform: scale(1.02); }
-        .btn:disabled { opacity: 0.3; cursor: default; transform: none; }
+        .btn { width: 100%; padding: 15px; border: none; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; color: #000; transition: 0.2s; background: #555; color: white;}
+        .btn.active { background: var(--green); color: #000; box-shadow: 0 0 10px rgba(76, 175, 80, 0.4); }
+        .btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none;}
 
-        .slider-box { margin: 15px 0; padding: 10px; background: #222; border-radius: 4px; border: 1px solid #333; }
-        .slider-label { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
+        .slider-box { margin: 15px 0; padding: 10px; background: #2a2a2a; border-radius: 4px; border: 1px solid #333; }
+        .slider-header { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
 
-        /* Training Modal */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-box { background: #222; padding: 30px; border-radius: 10px; text-align: center; border: 1px solid #555; width: 280px; }
-        .train-img { width: 64px; height: 64px; border: 2px solid #555; margin: 15px auto; display: block; image-rendering: pixelated; }
-        
-        .guess-text { color: var(--success); font-size: 0.9em; margin-bottom: 5px; min-height: 1.2em; }
-        .train-input { font-size: 30px; width: 80px; text-align: center; background: #000; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; }
-        
-        .modal-actions { display: flex; gap: 10px; margin-top: 15px; }
-        .btn-ignore { background: #d32f2f; font-size: 0.8em; }
-        .btn-save { background: var(--success); color:black; }
+        .legend { font-size: 0.75em; color: #888; margin-top: 20px; text-align: center; line-height: 1.6; }
+        .key { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #333; color: white; margin: 0 2px; }
 
-        .memory-stats { font-size: 0.7em; color: #555; text-align: center; margin-top: 20px; cursor: pointer; }
+        /* Correction Tooltip */
+        .tooltip { position: absolute; background: rgba(0,0,0,0.9); padding: 10px; border: 1px solid #fff; border-radius: 4px; pointer-events: none; display: none; transform: translate(-50%, -100%); margin-top: -10px; text-align: center; z-index: 100;}
+        .tooltip-img { width: 32px; height: 32px; border: 1px solid #555; display: block; margin: 0 auto 5px; image-rendering: pixelated; }
     </style>
 </head>
 <body>
 
-    <h2 style="color:#29b6f6; margin-top:0;">why hard</h2>
+    <h2 style="color:var(--accent); margin-top:0;">ewgeg</h2>
     
-    <div class="container">
-        <!-- Main Image -->
-        <div class="stage">
-            <span class="placeholder">Paste Screenshot (Ctrl+V)</span>
-            <canvas id="mainCanvas" style="display:none"></canvas>
+    <div class="layout">
+        <div class="stage" id="stageContainer">
+            <canvas id="mainCanvas"></canvas>
             <canvas id="overlayCanvas"></canvas>
+            <div id="correctionTooltip" class="tooltip">
+                <canvas id="tooltipCanvas" class="tooltip-img"></canvas>
+                <div>Type correct number</div>
+            </div>
         </div>
 
-        <!-- Controls -->
         <div class="panel">
-            <div id="status" class="status">Waiting for image...</div>
+            <div id="status" class="status">Paste screenshot (Ctrl+V)</div>
 
             <div class="slider-box">
-                <div class="slider-label"><span>Detection Sensitivity</span> <span id="threshVal">180</span></div>
+                <div class="slider-header"><span>Filter Sensitivity</span> <span id="threshVal">180</span></div>
                 <input type="range" id="threshold" min="100" max="250" value="180" style="width:100%" oninput="process()">
-                <div style="font-size:0.7em; color:#666; margin-top:5px;">Move slider until you see clean white numbers below.</div>
+                <div style="font-size:0.7em; color:#777; margin-top:5px;">
+                    Move right if seeing bucket rims.<br>Move left if numbers disappear.
+                </div>
             </div>
 
-            <button id="solveBtn" class="btn btn-solve" disabled onclick="confirmMove()">SOLVE</button>
+            <button id="solveBtn" class="btn" disabled onclick="confirmMove()">SOLVE</button>
             
-            <div class="memory-stats" onclick="resetMem()">
-                [ Memory Size: <span id="memSize">0</span> templates ]<br>
-                (Click to Reset)
+            <div class="legend">
+                If a number is wrong:<br>
+                <span class="key">Click the number</span> on the image<br>
+                <span class="key">Type new number</span> (1-9)<br>
+                It fixes all similar numbers instantly.
             </div>
-        </div>
-    </div>
-
-    <!-- Training Modal -->
-    <div id="trainModal" class="modal">
-        <div class="modal-box">
-            <h3 style="margin:0 0 10px 0;">New Shape</h3>
             
-            <!-- What Computer Sees -->
-            <canvas id="trainCanvas" class="train-img"></canvas>
-            
-            <div id="guessText" class="guess-text"></div>
-            <input type="number" id="trainInput" class="train-input" min="0" max="9">
-            
-            <div class="modal-actions">
-                <button class="btn btn-ignore" onclick="ignoreShape()">IGNORE</button>
-                <button class="btn btn-save" onclick="saveShape()">ENTER</button>
+            <div style="margin-top:20px; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
+                [ Clear Learned Data ]
             </div>
-            <div style="font-size:0.7em; color:#666; margin-top:10px;">Press Enter to confirm</div>
         </div>
     </div>
 
@@ -97,20 +78,35 @@
     // --- CONFIG ---
     const ROWS = 15;
     const COLS = 10;
-    const NORM_SIZE = 16; 
+    const NORM_SIZE = 16;
     
+    // --- PRE-LOADED GENERIC DIGIT SHAPES (5x7 ASCII ART) ---
+    // This gives the AI a "Baseline" idea of what numbers look like
+    const ASCII_DIGITS = {
+        1: ["  #  "," ##  ","  #  ","  #  ","  #  ","  #  "," ### "],
+        2: [" ### ","#   #","    #","   # ","  #  "," #   ","#####"],
+        3: ["#####","    #","   # ","    #","    #","#   #"," ### "],
+        4: ["   # ","  ## "," # # ","#  # ","#####","   # ","   # "],
+        5: ["#####","#    ","#### ","    #","    #","#   #"," ### "],
+        6: [" ### ","#    ","#    ","#### ","#   #","#   #"," ### "],
+        7: ["#####","    #","   # ","  #  "," #   "," #   "," #   "],
+        8: [" ### ","#   #"," ### ","#   #","#   #","#   #"," ### "],
+        9: [" ### ","#   #","#   #"," ####","    #","   # "," ### "],
+        0: [" ### ","#   #","#   #","#   #","#   #","#   #"," ### "] // Treat 0 as potential garbage or 0
+    };
+
     // --- STATE ---
     let srcImg = null;
     let gridData = [];
     let blobs = [];
-    let trainingQueue = [];
     let currentBest = null;
-    let memory = JSON.parse(localStorage.getItem('sum10_suggest_mem')) || [];
+    let userMemory = JSON.parse(localStorage.getItem('sum10_quick_mem')) || [];
+    let systemMemory = []; // Generated from ASCII
 
     // --- INIT ---
-    updateMemStats();
-
-    // --- PASTE HANDLER ---
+    generateSystemMemory();
+    
+    // --- EVENTS ---
     window.addEventListener('paste', e => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let item of items) {
@@ -123,11 +119,82 @@
         }
     });
 
-    // --- PROCESSING PIPELINE ---
+    // Correction Interaction
+    const stage = document.getElementById('stageContainer');
+    const tooltip = document.getElementById('correctionTooltip');
+    let correctionTarget = null; // { blob, index }
+
+    stage.addEventListener('mousedown', e => {
+        if(!srcImg) return;
+        const rect = stage.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Find clicked blob
+        const clicked = blobs.find(b => 
+            x >= b.x && x <= b.x + b.w && 
+            y >= b.y && y <= b.y + b.h
+        );
+
+        if(clicked) {
+            correctionTarget = clicked;
+            // Show Tooltip
+            tooltip.style.display = 'block';
+            tooltip.style.left = (clicked.x + clicked.w/2) + 'px';
+            tooltip.style.top = clicked.y + 'px';
+            
+            // Draw preview in tooltip
+            const tc = document.getElementById('tooltipCanvas');
+            tc.width = NORM_SIZE; tc.height = NORM_SIZE;
+            const tctx = tc.getContext('2d');
+            // Reconstruct image from feature data
+            const img = tctx.createImageData(NORM_SIZE, NORM_SIZE);
+            for(let i=0; i<clicked.feature.length; i++) {
+                const v = clicked.feature[i]*255;
+                img.data[i*4]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255;
+            }
+            tctx.putImageData(img,0,0);
+            
+            // Focus hidden input logic (we use keydown on window)
+            document.getElementById('status').innerText = `Editing number at Row ${clicked.gridR+1}, Col ${clicked.gridC+1}... Type 1-9.`;
+            e.stopPropagation(); // Prevent deselect
+        } else {
+            tooltip.style.display = 'none';
+            correctionTarget = null;
+        }
+    });
+
+    window.addEventListener('keydown', e => {
+        if(correctionTarget && e.key >= '0' && e.key <= '9') {
+            const num = parseInt(e.key);
+            
+            // LEARN: Add to user memory
+            userMemory.push({ label: num, data: correctionTarget.feature });
+            localStorage.setItem('sum10_quick_mem', JSON.stringify(userMemory));
+            
+            // Hide tooltip
+            tooltip.style.display = 'none';
+            correctionTarget = null;
+            
+            // Re-run process to update all similar numbers
+            document.getElementById('status').innerText = `Learned! Updating board...`;
+            process();
+        }
+        if(correctionTarget && (e.key === 'Escape' || e.key === 'Delete' || e.key === 'x')) {
+             // Treat as garbage (bucket rim)
+             userMemory.push({ label: -1, data: correctionTarget.feature });
+             localStorage.setItem('sum10_quick_mem', JSON.stringify(userMemory));
+             tooltip.style.display = 'none';
+             correctionTarget = null;
+             process();
+        }
+    });
+
+
+    // --- MAIN PIPELINE ---
     function process() {
         if(!srcImg) return;
-        document.querySelector('.placeholder').style.display = 'none';
-
+        
         const thresh = parseInt(document.getElementById('threshold').value);
         document.getElementById('threshVal').innerText = thresh;
 
@@ -135,232 +202,150 @@
         const ctx = cvs.getContext('2d');
         const ovl = document.getElementById('overlayCanvas');
         
-        cvs.style.display = 'block';
         cvs.width = srcImg.width; cvs.height = srcImg.height;
         ovl.width = srcImg.width; ovl.height = srcImg.height;
 
-        // Draw & Threshold
         ctx.drawImage(srcImg, 0, 0);
-        
-        // 1. Detect Blobs
-        const rawData = ctx.getImageData(0,0,cvs.width,cvs.height);
-        blobs = detectBlobs(rawData, cvs.width, cvs.height, thresh);
 
-        // 2. Map to Grid
+        // 1. Detect
+        const raw = ctx.getImageData(0,0,cvs.width,cvs.height);
+        blobs = detectBlobs(raw, cvs.width, cvs.height, thresh);
+
+        // 2. Map
         gridData = mapBlobsToGrid(blobs);
 
-        // 3. Recognize
-        trainingQueue = [];
-        let recognized = 0;
-
+        // 3. Recognize (Guessing)
+        let foundCount = 0;
+        
         blobs.forEach(b => {
             if(b.gridR === null) return;
 
-            // Extract features
             b.feature = extractFeature(ctx, b);
             
-            // Find NEAREST match
-            const bestMatch = findNearestMatch(b.feature);
+            // CHECK USER MEMORY FIRST (High priority)
+            let match = findBestMatch(b.feature, userMemory);
             
-            // Decision Logic
-            // If error is very low (< 10 pixels different out of 256), auto-accept
-            if(bestMatch && bestMatch.error < 15) {
-                if(bestMatch.label === -1) {
-                    b.isGarbage = true; // Auto-ignore garbage
+            // IF NO USER MATCH, CHECK SYSTEM MEMORY (Low priority, fuzzy)
+            if(!match) {
+                match = findBestMatch(b.feature, systemMemory);
+            }
+
+            if(match) {
+                // Apply label
+                if(match.label !== -1) {
+                    gridData[b.gridR][b.gridC] = match.label;
+                    b.label = match.label;
+                    foundCount++;
                 } else {
-                    gridData[b.gridR][b.gridC] = bestMatch.label;
-                    b.label = bestMatch.label;
-                    recognized++;
+                    b.isGarbage = true;
                 }
             } else {
-                // Not sure enough -> Ask user (but provide the best guess!)
-                b.bestGuess = bestMatch; 
-                trainingQueue.push(b);
+                // If totally unknown, default to checking system memory with higher error tolerance
+                // Or just leave it blank. But user asked for rough guessing.
+                // Let's force a guess from system memory even if error is high
+                const forced = findBestMatch(b.feature, systemMemory, Infinity); 
+                gridData[b.gridR][b.gridC] = forced.label;
+                b.label = forced.label;
+                b.lowConfidence = true; // Mark visual as "maybe wrong"
+                foundCount++;
             }
         });
 
         // 4. Update UI
         drawOverlay();
+        solve();
 
-        if(trainingQueue.length > 0) {
-            document.getElementById('status').innerText = `Needs Input: ${trainingQueue.length} items.`;
-            startTraining();
-        } else if(recognized > 0) {
-            document.getElementById('status').innerText = `Ready. Found ${recognized} numbers.`;
-            solve();
+        if(foundCount > 0) {
+            document.getElementById('status').innerText = `Solved. Click any wrong number to fix it.`;
         } else {
-            document.getElementById('status').innerText = "No numbers found. Check slider.";
+            document.getElementById('status').innerText = "No numbers seen. Adjust Slider.";
         }
     }
 
-    // --- BLOB DETECTION ---
+    // --- HELPER FUNCTIONS ---
+
     function detectBlobs(imgData, w, h, threshold) {
         const d = imgData.data;
         const visited = new Uint8Array(w * h);
-        const results = [];
-
+        const res = [];
         for(let i=0; i<w*h; i++) {
             if(visited[i]) continue;
-            // Brightness check (R+G+B)/3
             if((d[i*4]+d[i*4+1]+d[i*4+2])/3 > threshold) {
-                let stack = [i];
-                visited[i] = 1;
-                let minX=w, maxX=0, minY=h, maxY=0;
-                
-                while(stack.length) {
-                    const c = stack.pop();
-                    const cx = c % w;
-                    const cy = Math.floor(c / w);
-                    if(cx<minX) minX=cx; if(cx>maxX) maxX=cx;
-                    if(cy<minY) minY=cy; if(cy>maxY) maxY=cy;
-
-                    [c+1, c-1, c+w, c-w].forEach(n => {
-                        if(n>=0 && n<w*h && !visited[n] && (d[n*4]+d[n*4+1]+d[n*4+2])/3 > threshold) {
-                            visited[n] = 1;
-                            stack.push(n);
+                let stack=[i], minX=w, maxX=0, minY=h, maxY=0;
+                visited[i]=1;
+                while(stack.length){
+                    const c=stack.pop();
+                    const cx=c%w, cy=Math.floor(c/w);
+                    if(cx<minX)minX=cx; if(cx>maxX)maxX=cx;
+                    if(cy<minY)minY=cy; if(cy>maxY)maxY=cy;
+                    [c+1,c-1,c+w,c-w].forEach(n=>{
+                        if(n>=0 && n<w*h && !visited[n] && (d[n*4]+d[n*4+1]+d[n*4+2])/3>threshold){
+                            visited[n]=1; stack.push(n);
                         }
                     });
                 }
-                const width = maxX-minX+1;
-                const height = maxY-minY+1;
-                // Basic size filter to remove dust/lines
-                if(width>3 && height>6 && width<60 && height<60) {
-                    results.push({x:minX, y:minY, w:width, h:height});
-                }
+                const width=maxX-minX+1, height=maxY-minY+1;
+                if(width>3 && height>6 && width<60 && height<60) res.push({x:minX, y:minY, w:width, h:height});
             }
         }
-        return results;
+        return res;
     }
 
-    // --- FEATURE EXTRACTION ---
     function extractFeature(ctx, b) {
-        // Create 16x16 normalized grid
         const tc = document.createElement('canvas');
         tc.width = NORM_SIZE; tc.height = NORM_SIZE;
         const tctx = tc.getContext('2d');
-        
-        // Scale blob to fit
         tctx.drawImage(ctx.canvas, b.x, b.y, b.w, b.h, 0, 0, NORM_SIZE, NORM_SIZE);
-        
-        // Convert to binary array
         const id = tctx.getImageData(0,0,NORM_SIZE,NORM_SIZE).data;
         const arr = [];
-        for(let i=0; i<id.length; i+=4) {
-            // High contrast
-            arr.push(id[i] > 100 ? 1 : 0);
-        }
+        for(let i=0; i<id.length; i+=4) arr.push(id[i]>100?1:0);
         return arr;
     }
 
-    // --- MATCHING ---
-    function findNearestMatch(feature) {
-        if(memory.length === 0) return null;
-        
+    function generateSystemMemory() {
+        // Convert ASCII art into 16x16 feature arrays
+        for(let num in ASCII_DIGITS) {
+            const art = ASCII_DIGITS[num];
+            // Map 5x7 art to 16x16 grid roughly
+            const feature = new Array(256).fill(0);
+            for(let r=0; r<16; r++) {
+                for(let c=0; c<16; c++) {
+                    // Map 16 coords to 7x5 coords
+                    const ar = Math.floor(r / (16/7));
+                    const ac = Math.floor(c / (16/5));
+                    if(art[ar] && art[ar][ac] === '#') {
+                        feature[r*16+c] = 1;
+                    }
+                }
+            }
+            systemMemory.push({ label: parseInt(num), data: feature });
+        }
+    }
+
+    function findBestMatch(feature, library, maxError=40) { // 40/256 error allowed (~15%)
         let best = null;
-        let minError = Infinity;
-
-        memory.forEach(mem => {
-            let error = 0;
-            // Hamming distance (count different pixels)
-            for(let i=0; i<feature.length; i++) {
-                if(feature[i] !== mem.data[i]) error++;
-            }
-            if(error < minError) {
-                minError = error;
-                best = mem;
-            }
+        let minErr = Infinity;
+        library.forEach(item => {
+            let err = 0;
+            for(let i=0; i<256; i++) if(feature[i]!==item.data[i]) err++;
+            if(err < minErr) { minErr = err; best = item; }
         });
-
-        // Return the closest thing we have, even if error is high
-        return { label: best.label, error: minError };
+        if(minErr <= maxError) return best;
+        return null;
     }
 
-    // --- TRAINING UI ---
-    function startTraining() {
-        if(trainingQueue.length === 0) {
-            document.getElementById('trainModal').style.display = 'none';
-            updateMemStats();
-            process(); // Re-run to solve
-            return;
-        }
-
-        const b = trainingQueue[0];
-        const modal = document.getElementById('trainModal');
-        const guessTxt = document.getElementById('guessText');
-        const inp = document.getElementById('trainInput');
-        const c = document.getElementById('trainCanvas');
-
-        // Draw preview
-        c.width = NORM_SIZE; c.height = NORM_SIZE;
-        const ctx = c.getContext('2d');
-        const img = ctx.createImageData(NORM_SIZE, NORM_SIZE);
-        for(let i=0; i<b.feature.length; i++) {
-            const val = b.feature[i]*255;
-            img.data[i*4]=val; img.data[i*4+1]=val; img.data[i*4+2]=val; img.data[i*4+3]=255;
-        }
-        ctx.putImageData(img,0,0);
-
-        // AUTO-SUGGESTION LOGIC
-        inp.value = '';
-        guessTxt.innerText = '';
-        
-        if(b.bestGuess) {
-            // If we have a guess, pre-fill it!
-            if(b.bestGuess.label !== -1) {
-                inp.value = b.bestGuess.label;
-                guessTxt.innerText = `I think this is a ${b.bestGuess.label}?`;
-            } else {
-                guessTxt.innerText = "Looks like garbage?";
-            }
-        }
-
-        modal.style.display = 'flex';
-        inp.focus();
-        inp.select();
-    }
-
-    function saveShape() {
-        const val = parseInt(document.getElementById('trainInput').value);
-        if(isNaN(val)) return;
-
-        // Add to memory
-        memory.push({ label: val, data: trainingQueue[0].feature });
-        localStorage.setItem('sum10_suggest_mem', JSON.stringify(memory));
-        
-        trainingQueue.shift();
-        startTraining();
-    }
-
-    function ignoreShape() {
-        memory.push({ label: -1, data: trainingQueue[0].feature });
-        localStorage.setItem('sum10_suggest_mem', JSON.stringify(memory));
-        trainingQueue.shift();
-        startTraining();
-    }
-
-    document.getElementById('trainInput').addEventListener("keydown", (e) => {
-        if(e.key === "Enter") saveShape();
-    });
-
-    // --- GRID MAPPER ---
     function mapBlobsToGrid(rawBlobs) {
         let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
         if(rawBlobs.length === 0) return grid;
-        
         let minX=9999, maxX=0, minY=9999, maxY=0;
         rawBlobs.forEach(b => {
-            if(b.x<minX) minX=b.x; if(b.x+b.w>maxX) maxX=b.x+b.w;
-            if(b.y<minY) minY=b.y; if(b.y+b.h>maxY) maxY=b.y+b.h;
+            if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
+            if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;
         });
-
-        const totalW = maxX-minX;
-        const totalH = maxY-minY;
-        const cellW = totalW/9.5;
-        const cellH = totalH/14.5;
-
+        const totalW = maxX-minX, totalH = maxY-minY;
+        const cellW = totalW/9.5, cellH = totalH/14.5;
         rawBlobs.forEach(b => {
-            const cx = b.x+b.w/2;
-            const cy = b.y+b.h/2;
+            const cx = b.x+b.w/2, cy = b.y+b.h/2;
             const c = Math.round((cx-minX)/(totalW/9));
             const r = Math.round((cy-minY)/(totalH/14));
             if(c>=0 && c<COLS && r>=0 && r<ROWS) {
@@ -372,46 +357,39 @@
         return grid;
     }
 
-    // --- SOLVER ---
     function solve() {
         let best = null;
         let maxScore = -1;
-        
-        for (let r1 = 0; r1 < ROWS; r1++) {
-            for (let c1 = 0; c1 < COLS; c1++) {
-                for (let r2 = r1; r2 < ROWS; r2++) {
-                    for (let c2 = c1; c2 < COLS; c2++) {
-                        let sum = 0; let count = 0;
+        for (let r1=0; r1<ROWS; r1++) {
+            for (let c1=0; c1<COLS; c1++) {
+                for (let r2=r1; r2<ROWS; r2++) {
+                    for (let c2=c1; c2<COLS; c2++) {
+                        let s=0, c=0;
                         for(let i=r1; i<=r2; i++){
                             for(let j=c1; j<=c2; j++){
                                 let v = gridData[i][j];
-                                sum+=v; if(v>0) count++;
+                                s+=v; if(v>0) c++;
                             }
                         }
-                        if(sum===10 && count>0) {
-                            // Score: Higher count is better. Area breaks ties.
-                            let score = (count*1000) + ((r2-r1)*(c2-c1));
-                            if(score > maxScore) {
-                                maxScore = score;
-                                best = { r1,c1,r2,c2,count };
-                            }
+                        if(s===10 && c>0) {
+                            let score = (c*1000) + ((r2-r1)*(c2-c1));
+                            if(score > maxScore) { maxScore=score; best={r1,c1,r2,c2,c}; }
                         }
                     }
                 }
             }
         }
-
         currentBest = best;
         const btn = document.getElementById('solveBtn');
         if(best) {
-            document.getElementById('status').innerText = `Best Move: Clears ${best.count} tiles.`;
             btn.disabled = false;
-            btn.innerText = "MATCH DONE (Next)";
+            btn.className = "btn active";
+            btn.innerHTML = `MATCH FOUND (Clears ${best.c})`;
             drawOverlay(best);
         } else {
-            document.getElementById('status').innerText = "No moves available.";
             btn.disabled = true;
-            btn.innerText = "NO MOVES";
+            btn.className = "btn";
+            btn.innerHTML = "NO MOVES";
             drawOverlay();
         }
     }
@@ -421,18 +399,18 @@
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // Draw recognized numbers
         blobs.forEach(b => {
-            if(b.label && b.label !== -1) {
-                ctx.fillStyle = "#00c853";
-                ctx.font = "bold 12px monospace";
-                ctx.fillText(b.label, b.x, b.y-2);
-                ctx.strokeStyle = "rgba(0,255,0,0.3)";
-                ctx.strokeRect(b.x, b.y, b.w, b.h);
-            }
+            if(b.isGarbage || !b.label) return;
+            
+            // Text color based on confidence
+            ctx.fillStyle = b.lowConfidence ? "#ffff00" : "#00ff00";
+            ctx.font = "bold 14px monospace";
+            ctx.fillText(b.label, b.x, b.y-2);
+            
+            ctx.strokeStyle = b.lowConfidence ? "rgba(255,255,0,0.3)" : "rgba(0,255,0,0.3)";
+            ctx.strokeRect(b.x, b.y, b.w, b.h);
         });
 
-        // Highlight Move
         if(highlight) {
             let minX=9999, maxX=0, minY=9999, maxY=0;
             let found = false;
@@ -444,11 +422,12 @@
                 }
             });
             if(found) {
+                const pad = 4;
                 ctx.strokeStyle = "#00e676";
                 ctx.lineWidth = 4;
-                ctx.strokeRect(minX-4, minY-4, (maxX-minX)+8, (maxY-minY)+8);
+                ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
                 ctx.fillStyle = "rgba(0, 230, 118, 0.3)";
-                ctx.fillRect(minX-4, minY-4, (maxX-minX)+8, (maxY-minY)+8);
+                ctx.fillRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
             }
         }
     }
@@ -463,16 +442,13 @@
         blobs = blobs.filter(b => !(b.gridR>=currentBest.r1 && b.gridR<=currentBest.r2 && b.gridC>=currentBest.c1 && b.gridC<=currentBest.c2));
         solve();
     }
-
-    function resetMem() {
-        if(confirm("Clear all memory?")) {
-            localStorage.removeItem('sum10_suggest_mem');
-            location.reload();
-        }
-    }
     
-    function updateMemStats() {
-        document.getElementById('memSize').innerText = memory.length;
+    function resetMem() {
+        if(confirm("Clear learned numbers?")) {
+            localStorage.removeItem('sum10_quick_mem');
+            userMemory = [];
+            process();
+        }
     }
 </script>
 </body>
