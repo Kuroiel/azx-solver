@@ -3,29 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Strategic Solver</title>
+    <title>Sum-10 Pro Solver</title>
     <style>
-        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --gold: #ffd740; --green: #69f0ae; }
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #2979ff; --gold: #ffd740; --green: #00e676; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
-        /* Layout: Row-Reverse puts the panel on the Left, Stage on Right */
+        /* Layout: Row-Reverse puts the panel on the Left */
         .layout { display: flex; flex-direction: row-reverse; gap: 20px; flex-wrap: wrap-reverse; justify-content: center; align-items: flex-start; }
         
         /* Interactive Stage */
         .stage { position: relative; border: 2px solid #444; background: #000; cursor: crosshair; }
         canvas { display: block; image-rendering: pixelated; }
-        #overlayCanvas { position: absolute; top: 0; left: 0; }
+        #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
         
         /* Controls */
         .panel { width: 300px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
         .status { font-weight: bold; margin-bottom: 15px; color: var(--accent); min-height: 1.2em; font-size: 0.9em; border-bottom: 1px solid #333; padding-bottom: 10px; }
         
-        .btn { width: 100%; padding: 20px; border: none; border-radius: 4px; font-weight: bold; font-size: 18px; cursor: pointer; background: #333; color: #777; transition: 0.1s; margin-top: 10px;}
-        .btn.active { background: var(--green); color: #000; box-shadow: 0 0 15px rgba(105, 240, 174, 0.4); animation: pulse 1.5s infinite; }
+        .btn { width: 100%; padding: 25px; border: none; border-radius: 6px; font-weight: bold; font-size: 20px; cursor: pointer; background: #333; color: #777; transition: 0.1s; margin-top: 10px;}
+        .btn.active { background: var(--green); color: #000; box-shadow: 0 0 20px rgba(0, 230, 118, 0.3); animation: pulse 1.5s infinite; }
         .btn:active { transform: translateY(2px); }
         .btn:disabled { opacity: 0.3; cursor: not-allowed; animation: none; }
 
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(105, 240, 174, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(105, 240, 174, 0); } 100% { box-shadow: 0 0 0 0 rgba(105, 240, 174, 0); } }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
 
         .slider-box { margin: 15px 0; padding: 10px; background: #2a2a2a; border-radius: 4px; border: 1px solid #333; }
         .slider-header { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
@@ -36,12 +36,11 @@
         /* Correction Tooltip */
         .tooltip { position: absolute; background: rgba(0,0,0,0.95); padding: 15px; border: 1px solid #fff; border-radius: 6px; pointer-events: none; display: none; transform: translate(-50%, -100%); margin-top: -15px; text-align: center; z-index: 100; box-shadow: 0 5px 15px black;}
         .tooltip-img { width: 48px; height: 48px; border: 1px solid #555; display: block; margin: 0 auto 10px; image-rendering: pixelated; }
-        .tooltip-hint { color: var(--gold); font-size: 12px; margin-top: 5px; }
     </style>
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">sprinters stakes</h2>
+    <h2 style="color:var(--accent); margin-top:0;">Kikuka Sho</h2>
     
     <div class="layout">
         <div class="stage" id="stageContainer">
@@ -50,7 +49,6 @@
             <div id="correctionTooltip" class="tooltip">
                 <canvas id="tooltipCanvas" class="tooltip-img"></canvas>
                 <div>Type Correct Number</div>
-                <div class="tooltip-hint">(Press 'X' to delete)</div>
             </div>
         </div>
 
@@ -58,15 +56,17 @@
             <div id="status" class="status">Paste screenshot (Ctrl+V)</div>
 
             <div class="slider-box">
-                <div class="slider-header"><span>Filter Sensitivity</span> <span id="threshVal">180</span></div>
-                <input type="range" id="threshold" min="100" max="250" value="180" style="width:100%" oninput="process()">
+                <div class="slider-header"><span>Contrast Filter</span> <span id="threshVal">140</span></div>
+                <input type="range" id="threshold" min="80" max="220" value="140" style="width:100%" oninput="process()">
+                <div style="font-size:0.7em; color:#777; margin-top:5px;">
+                    Ensure ALL numbers are detected.<br>Blue lines = Grid slots.
+                </div>
             </div>
 
             <button id="solveBtn" class="btn" disabled onclick="applyMove()">MOVE DONE</button>
             
             <div class="info-text">
-                Strategy: <b>Look-Ahead AI</b><br>
-                It may pick a smaller move now to unlock a massive move next.<br><br>
+                <b>Strategy:</b> Maximize Total Cleared.<br>
                 1. Do <span class="highlight">Green Box</span> move.<br>
                 2. Click <span class="highlight">MOVE DONE</span>.<br>
             </div>
@@ -83,7 +83,6 @@
     const COLS = 10;
     const NORM_SIZE = 16;
     
-    // --- ASCII HEURISTICS ---
     const ASCII_DIGITS = {
         1: ["  #  "," ##  ","  #  ","  #  ","  #  ","  #  "," ### "],
         2: [" ### ","#   #","    #","   # ","  #  "," #   ","#####"],
@@ -97,12 +96,11 @@
         0: [" ### ","#   #","#   #","#   #","#   #","#   #"," ### "]
     };
 
-    // --- STATE ---
     let srcImg = null;
     let gridData = [];
     let blobs = [];
     let currentMove = null;
-    let userMemory = JSON.parse(localStorage.getItem('sum10_focus_mem')) || [];
+    let userMemory = JSON.parse(localStorage.getItem('sum10_pro_mem')) || [];
     let systemMemory = [];
 
     // --- INIT ---
@@ -125,12 +123,14 @@
     const tooltip = document.getElementById('correctionTooltip');
     let correctionTarget = null; 
 
+    // Handle Clicking on Numbers to Fix
     stage.addEventListener('mousedown', e => {
         if(!srcImg) return;
         const rect = stage.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
+        // Find clicked blob
         const clicked = blobs.find(b => 
             x >= b.x - 5 && x <= b.x + b.w + 5 && 
             y >= b.y - 15 && y <= b.y + b.h + 5
@@ -162,21 +162,21 @@
         if(correctionTarget && e.key >= '0' && e.key <= '9') {
             const num = parseInt(e.key);
             userMemory.push({ label: num, data: correctionTarget.feature });
-            localStorage.setItem('sum10_focus_mem', JSON.stringify(userMemory));
+            localStorage.setItem('sum10_pro_mem', JSON.stringify(userMemory));
             tooltip.style.display = 'none';
             correctionTarget = null;
             process(); 
         }
         if(correctionTarget && (e.key.toLowerCase() === 'x' || e.key === 'Delete')) {
              userMemory.push({ label: -1, data: correctionTarget.feature });
-             localStorage.setItem('sum10_focus_mem', JSON.stringify(userMemory));
+             localStorage.setItem('sum10_pro_mem', JSON.stringify(userMemory));
              tooltip.style.display = 'none';
              correctionTarget = null;
              process();
         }
     });
 
-    // --- PROCESS ---
+    // --- MAIN PIPELINE ---
     function process() {
         if(!srcImg) return;
         
@@ -209,6 +209,7 @@
                     b.label = match.label;
                 } else {
                     b.isGarbage = true;
+                    gridData[b.gridR][b.gridC] = 0; // Ensure garbage doesn't sum
                 }
             } else {
                 const forced = findBestMatch(b.feature, systemMemory, Infinity);
@@ -221,9 +222,8 @@
         calculateStrategicMove();
     }
 
-    // --- AI STRATEGY ENGINE (Depth-1 Lookahead) ---
+    // --- STRATEGY ENGINE (Lookahead) ---
     function calculateStrategicMove() {
-        // 1. Get all currently available moves
         const currentMoves = getAllMoves(gridData);
         
         if (currentMoves.length === 0) {
@@ -232,35 +232,24 @@
             return;
         }
 
-        // Optimization: If there are too many moves, only lookahead for the top X largest ones
-        // to prevent browser freeze.
-        const candidates = currentMoves.slice(0, 15); // Check top 15 moves deeply
-
+        const candidates = currentMoves.slice(0, 15);
         let bestStrategy = null;
         let maxTotalPoints = -1;
 
-        // 2. Simulate each candidate move
         for (let move of candidates) {
-            // A. Create a hypothetical board state
             const simGrid = cloneGrid(gridData);
-            
-            // B. Apply this move to simulation
             applyMoveToGrid(simGrid, move);
             
-            // C. Find the best move on the NEW board (The "Next Step")
             const nextMoves = getAllMoves(simGrid);
             const bestNext = nextMoves.length > 0 ? nextMoves[0] : null;
             
-            // D. Calculate Score
-            // Score = Current Move Count + (Next Move Count * 0.9)
-            // We weigh the next move slightly less to prioritize immediate points slightly
+            // Score = Current Move + Next Move
             const nextScore = bestNext ? bestNext.count : 0;
             const totalScore = move.count + nextScore;
 
             if (totalScore > maxTotalPoints) {
                 maxTotalPoints = totalScore;
                 bestStrategy = move;
-                // Store the predicted next score for UI logic if needed
                 bestStrategy.predictedNext = nextScore;
             }
         }
@@ -282,6 +271,7 @@
                                 sum+=v; if(v>0) count++;
                             }
                         }
+                        // STRICT MATH: Must equal 10 exactly.
                         if(sum === 10 && count > 0) {
                             moves.push({
                                 r1, c1, r2, c2, count,
@@ -292,20 +282,7 @@
                 }
             }
         }
-        // Sort by Count Descending
         return moves.sort((a, b) => b.count - a.count);
-    }
-
-    function cloneGrid(grid) {
-        return grid.map(row => [...row]);
-    }
-
-    function applyMoveToGrid(grid, move) {
-        for(let r=move.r1; r<=move.r2; r++) {
-            for(let c=move.c1; c<=move.c2; c++) {
-                grid[r][c] = 0;
-            }
-        }
     }
 
     // --- DRAWING ---
@@ -314,19 +291,28 @@
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // 1. Draw Labels (or Blackout if cleared)
+        // Draw Grid Lines (Debug to fix alignment)
+        const cellW = cvs.width / COLS;
+        const cellH = cvs.height / ROWS;
+        ctx.strokeStyle = "rgba(0, 150, 255, 0.2)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for(let r=1; r<ROWS; r++) { ctx.moveTo(0, r*cellH); ctx.lineTo(cvs.width, r*cellH); }
+        for(let c=1; c<COLS; c++) { ctx.moveTo(c*cellW, 0); ctx.lineTo(c*cellW, cvs.height); }
+        ctx.stroke();
+
         blobs.forEach(b => {
-            if(b.isGarbage || !b.label) return;
-            
-            // Check if this cell is cleared in gridData
+            // Check if this cell is cleared
             if (gridData[b.gridR][b.gridC] === 0) {
-                // DRAW BLACKOUT
-                ctx.fillStyle = "black";
-                ctx.fillRect(b.x, b.y, b.w, b.h);
-                return; // Stop drawing label
+                // DRAW BLACKOUT (This hides solved numbers)
+                ctx.fillStyle = "rgba(0,0,0,1)";
+                ctx.fillRect(b.x-2, b.y-2, b.w+4, b.h+4);
+                return;
             }
 
-            // Draw Label
+            if(b.isGarbage || !b.label) return;
+
+            // Draw Label Sticker
             const labelX = b.x - 2;
             const labelY = b.y - 12;
             const size = 14;
@@ -343,46 +329,35 @@
             ctx.fillText(b.label, labelX + size/2, labelY + size/2 + 1);
         });
 
-        // 2. Draw Best Move
         const btn = document.getElementById('solveBtn');
         if(currentMove) {
             btn.disabled = false;
             btn.className = "btn active";
             
-            let statusText = `Best Move: Clears ${currentMove.count}.`;
-            if(currentMove.predictedNext > 0) {
-                statusText += ` (Unlocks match of ${currentMove.predictedNext})`;
-            }
+            let statusText = `Clears ${currentMove.count}`;
+            if(currentMove.predictedNext > 0) statusText += ` (+${currentMove.predictedNext} next)`;
             
             btn.innerHTML = `MOVE DONE<br><span style="font-size:0.6em; font-weight:normal">${statusText}</span>`;
-            document.getElementById('status').innerText = statusText;
+            document.getElementById('status').innerText = "Best Move Calculated.";
 
-            let minX=9999, maxX=0, minY=9999, maxY=0;
-            let found = false;
-            
-            blobs.forEach(b => {
-                if(b.gridR >= currentMove.r1 && b.gridR <= currentMove.r2 && 
-                   b.gridC >= currentMove.c1 && b.gridC <= currentMove.c2 && !b.isGarbage) {
-                    if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
-                    if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;
-                    found=true;
-                }
-            });
+            // Draw Highlight
+            const x = currentMove.c1 * cellW;
+            const y = currentMove.r1 * cellH;
+            const w = (currentMove.c2 - currentMove.c1 + 1) * cellW;
+            const h = (currentMove.r2 - currentMove.r1 + 1) * cellH;
 
-            if(found) {
-                const pad = 6;
-                ctx.strokeStyle = "#69f0ae"; 
-                ctx.lineWidth = 4;
-                ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
-                
-                ctx.fillStyle = "rgba(105, 240, 174, 0.25)";
-                ctx.fillRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
-            }
+            const pad = 2;
+            ctx.strokeStyle = "#00e676"; 
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x+pad, y+pad, w-pad*2, h-pad*2);
+            ctx.fillStyle = "rgba(105, 240, 174, 0.25)";
+            ctx.fillRect(x+pad, y+pad, w-pad*2, h-pad*2);
+
         } else {
             btn.disabled = true;
             btn.className = "btn";
-            btn.innerHTML = "NO MOVES FOUND";
-            document.getElementById('status').innerText = "Board cleared or no moves left.";
+            btn.innerHTML = "NO MOVES";
+            document.getElementById('status').innerText = "Board cleared or stuck.";
         }
     }
 
@@ -392,7 +367,7 @@
         calculateStrategicMove();
     }
 
-    // --- UTILS ---
+    // --- HELPERS ---
     function detectBlobs(imgData, w, h, t) {
         const d=imgData.data, v=new Uint8Array(w*h), res=[];
         for(let i=0; i<w*h; i++) {
@@ -433,15 +408,49 @@
     function mapBlobsToGrid(blobs) {
         let g=Array(ROWS).fill().map(()=>Array(COLS).fill(0));
         if(!blobs.length) return g;
+        
         let minX=9999, maxX=0, minY=9999, maxY=0;
-        blobs.forEach(b=>{if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w; if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;});
-        const tW=maxX-minX, tH=maxY-minY, cW=tW/9.5, cH=tH/14.5;
         blobs.forEach(b=>{
-            const cx=b.x+b.w/2, cy=b.y+b.h/2;
-            const c=Math.round((cx-minX)/(tW/9)), r=Math.round((cy-minY)/(tH/14));
-            if(c>=0 && c<COLS && r>=0 && r<ROWS) { b.gridR=r; b.gridC=c; } else { b.gridR=null; }
+            if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
+            if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;
+        });
+
+        // Use bounding box of all blobs to define the grid
+        const tW=maxX-minX;
+        const tH=maxY-minY;
+        
+        // Approximate cell size (Grid is 10x15)
+        const cW = tW / 9.8; // slightly less than 10 to account for edges
+        const cH = tH / 14.8;
+
+        blobs.forEach(b => {
+            const cx = b.x + b.w/2;
+            const cy = b.y + b.h/2;
+            const c = Math.round((cx - minX) / (tW / 9));
+            const r = Math.round((cy - minY) / (tH / 14));
+            
+            if(c>=0 && c<COLS && r>=0 && r<ROWS) {
+                // Overlap protection
+                if(g[r][c] !== 0) {
+                    // Collision! Only allow the one closest to the center of the cell
+                    // (But for now just overwrite is okay as OCR usually filters noise)
+                }
+                b.gridR = r; b.gridC = c;
+            } else {
+                b.gridR = null; 
+            }
         });
         return g;
+    }
+
+    function cloneGrid(grid) { return grid.map(r => [...r]); }
+
+    function applyMoveToGrid(grid, move) {
+        for(let r=move.r1; r<=move.r2; r++) {
+            for(let c=move.c1; c<=move.c2; c++) {
+                grid[r][c] = 0;
+            }
+        }
     }
 
     function generateSystemMemory() {
@@ -456,7 +465,7 @@
     }
 
     function resetMem() {
-        if(confirm("Clear memory?")) { localStorage.removeItem('sum10_focus_mem'); userMemory=[]; process(); }
+        if(confirm("Clear memory?")) { localStorage.removeItem('sum10_pro_mem'); userMemory=[]; process(); }
     }
 </script>
 </body>
