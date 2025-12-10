@@ -3,98 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AZX minigame</title>
+    <title>Sum-10 Auto-Detector</title>
     <style>
-        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --green: #00c853; --warn: #ffab00; }
-        body { font-family: sans-serif; background: var(--bg); color: #fff; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00bcd4; --green: #4caf50; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
-        /* Layout */
-        .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; margin-top: 20px;}
-        
-        /* Left: Image */
-        .image-box { position: relative; border: 2px solid #333; display: none; }
+        h2 { color: var(--accent); margin-bottom: 5px; }
+        .instructions { color: #888; font-size: 0.9em; margin-bottom: 20px; text-align: center; }
+
+        .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+
+        /* Left: The Image Stage */
+        .stage { position: relative; border: 2px solid #333; min-width: 300px; min-height: 200px; background: #000; display: flex; justify-content: center; align-items: center; }
+        .stage canvas { display: block; max-width: 100%; }
         #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+        .placeholder { color: #555; pointer-events: none; }
 
         /* Right: Controls */
-        .controls { width: 320px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .panel { background: var(--panel); padding: 20px; border-radius: 8px; width: 320px; }
         
-        .status { color: #aaa; margin-bottom: 15px; font-style: italic; min-height: 1.2em; }
-        
-        /* The Big Button */
-        .btn { width: 100%; padding: 15px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; margin-bottom: 10px; transition: 0.2s; }
+        .btn { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; transition: 0.2s; }
         .btn-green { background: var(--green); color: white; }
-        .btn-green:hover { background: #009624; transform: scale(1.02); }
-        .btn-green:disabled { background: #444; color: #888; cursor: not-allowed; transform: none; }
-        
-        .btn-small { padding: 5px 10px; font-size: 12px; background: #333; color: #aaa; margin-top: 20px; }
+        .btn-green:hover { background: #43a047; }
+        .btn-green:disabled { background: #333; color: #666; cursor: default; }
+
+        .slider-group { margin-bottom: 15px; }
+        .slider-group label { display: flex; justify-content: space-between; font-size: 0.85em; color: #aaa; margin-bottom: 5px; }
+        input[type=range] { width: 100%; }
 
         /* Training Modal */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 100; }
-        .modal-content { background: #222; padding: 30px; border-radius: 10px; text-align: center; width: 300px; border: 1px solid #444; }
-        .train-img { transform: scale(3); image-rendering: pixelated; margin: 20px 0; border: 1px solid #555; }
-        .train-input { font-size: 30px; width: 60px; text-align: center; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
-
-        /* Grid Display (Mini) */
-        .grid-mini { display: grid; grid-template-columns: repeat(10, 1fr); gap: 1px; background: #333; margin-top: 15px; border: 1px solid #444; }
-        .cell-mini { width: 100%; height: 20px; text-align: center; font-size: 10px; background: #222; border: none; color: #888; }
-        .cell-mini.active { color: white; font-weight: bold; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 999; }
+        .modal-box { background: #222; padding: 30px; border-radius: 12px; text-align: center; border: 1px solid #444; }
+        .train-view { transform: scale(4); margin: 20px; border: 1px solid #666; image-rendering: pixelated; }
+        .train-input { font-size: 24px; width: 50px; text-align: center; padding: 5px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
     </style>
 </head>
 <body>
 
-    <h2 style="color:var(--accent)">Doro</h2>
-    <div style="color:#777; font-size: 0.9em;">Paste Image (Ctrl+V) &bull; Teach numbers once &bull; Solve instantly</div>
+    <h2>AZX minigame</h2>
+    <div class="instructions">Paste Screenshot (Ctrl+V).<br>If numbers aren't detecting, adjust the "Brightness Threshold".</div>
 
-    <div class="container">
-        <!-- The Screenshot -->
-        <div class="image-box" id="imgBox">
-            <canvas id="gameCanvas"></canvas>
+    <div class="layout">
+        <div class="stage" id="stage">
+            <span class="placeholder">Paste Image Here</span>
+            <canvas id="imgCanvas" style="display:none"></canvas>
             <canvas id="overlayCanvas"></canvas>
         </div>
 
-        <!-- The Sidebar -->
-        <div class="controls">
-            <div id="status" class="status">Waiting for paste...</div>
-            
-            <button id="actionBtn" class="btn btn-green" disabled onclick="confirmMove()">
-                WAITING FOR IMAGE
+        <div class="panel">
+            <div class="slider-group">
+                <label>Brightness Threshold <span id="threshVal">150</span></label>
+                <input type="range" id="threshold" min="50" max="250" value="150" oninput="reprocess()">
+            </div>
+
+            <div id="status" style="color: #ffd700; min-height: 1.2em; font-size: 0.9em;">Waiting...</div>
+
+            <button id="solveBtn" class="btn btn-green" disabled onclick="confirmMove()">
+                SOLVE
             </button>
-
-            <!-- Debug Grid to see what the computer "thinks" the numbers are -->
-            <div id="miniGrid" class="grid-mini"></div>
-
-            <button class="btn btn-small" onclick="clearMemory()">⚠ Reset Learned Numbers</button>
+            
+            <div style="margin-top: 20px; font-size: 0.8em; color: #666; text-align: center; cursor: pointer;" onclick="clearData()">
+                [ Reset Learned Numbers ]
+            </div>
         </div>
     </div>
 
-    <!-- The "Teach Me" Popup -->
+    <!-- Training Modal -->
     <div id="trainModal" class="modal">
-        <div class="modal-content">
-            <h3 style="margin-top:0">Unknown Shape</h3>
-            <p>I don't know this number yet.<br>What is it?</p>
-            <canvas id="trainCanvas" class="train-img"></canvas>
-            <br><br>
-            <input type="number" id="trainInput" class="train-input" min="0" max="9" autofocus>
-            <br><br>
-            <button class="btn btn-green" onclick="submitTraining()">Save & Continue</button>
+        <div class="modal-box">
+            <h3 style="margin:0 0 10px 0;">New Number Shape</h3>
+            <p style="color:#aaa; font-size:0.9em;">What number is this?</p>
+            <canvas id="trainCanvas" class="train-view"></canvas>
             <br>
-            <small style="color:#777; cursor:pointer" onclick="skipTraining()">Skip/Blank</small>
+            <input type="number" id="trainInput" class="train-input" min="0" max="9">
+            <br><br>
+            <button class="btn btn-green" onclick="saveTraining()">Save</button>
         </div>
     </div>
 
 <script>
-    // --- SETTINGS ---
-    const COLS = 10;
+    // CONSTANTS
     const ROWS = 15;
-    const THRESHOLD = 200; // Brightness threshold (0-255). Lower if numbers are dark.
-    // ----------------
-
-    // State
+    const COLS = 10;
+    
+    // STATE
+    let srcImage = null;
     let gridData = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-    let cellSignatures = Array(ROWS).fill().map(() => Array(COLS).fill(null));
-    let templateLibrary = JSON.parse(localStorage.getItem('sum10_templates')) || {};
-    let unknownQueue = []; // Queue for training
-    let currentBestMove = null;
+    let blobs = []; // Holds the detected number coordinates
+    let templates = JSON.parse(localStorage.getItem('sum10_blobs')) || {};
+    let trainingQueue = [];
+    let currentMove = null;
 
     // --- PASTE HANDLER ---
     window.addEventListener('paste', e => {
@@ -104,219 +102,262 @@
                 const blob = item.getAsFile();
                 const img = new Image();
                 img.src = URL.createObjectURL(blob);
-                img.onload = () => processImage(img);
+                img.onload = () => { srcImage = img; reprocess(); };
             }
         }
     });
 
-    function processImage(img) {
-        document.getElementById('imgBox').style.display = 'block';
-        document.getElementById('status').innerText = "Analyzing pixels...";
-        
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+    // --- MAIN PIPELINE ---
+    function reprocess() {
+        if(!srcImage) return;
+        document.querySelector('.placeholder').style.display = 'none';
+        document.getElementById('imgCanvas').style.display = 'block';
+
+        const thresh = parseInt(document.getElementById('threshold').value);
+        document.getElementById('threshVal').innerText = thresh;
+
+        // 1. Draw Image
+        const canvas = document.getElementById('imgCanvas');
         const overlay = document.getElementById('overlayCanvas');
-        
-        // Resize
-        canvas.width = img.width; canvas.height = img.height;
-        overlay.width = img.width; overlay.height = img.height;
-        ctx.drawImage(img, 0, 0);
+        canvas.width = srcImage.width; canvas.height = srcImage.height;
+        overlay.width = srcImage.width; overlay.height = srcImage.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(srcImage, 0, 0);
 
-        const cellW = img.width / COLS;
-        const cellH = img.height / ROWS;
+        // 2. Find Blobs (The Numbers)
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        blobs = detectBlobs(imgData, thresh);
 
-        // Reset Data
-        gridData = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-        cellSignatures = Array(ROWS).fill().map(() => Array(COLS).fill(null));
-        unknownQueue = [];
+        // 3. Map Blobs to Grid
+        gridData = mapBlobsToGrid(blobs, canvas.width, canvas.height);
 
-        // Build Mini Grid UI
-        const miniGrid = document.getElementById('miniGrid');
-        miniGrid.innerHTML = '';
-        
-        // 1. SCAN GRID & GENERATE SIGNATURES
-        for(let r=0; r<ROWS; r++){
-            for(let c=0; c<COLS; c++){
-                
-                // Create Input for Mini Grid
-                let cellInput = document.createElement('input');
-                cellInput.className = 'cell-mini';
-                cellInput.id = `mini-${r}-${c}`;
-                cellInput.readOnly = true;
-                miniGrid.appendChild(cellInput);
+        // 4. Identify Numbers (or Queue for training)
+        trainingQueue = [];
+        identifyNumbers();
 
-                // Get Cell Image Data
-                // We crop 20% off edges to ignore grid lines/borders
-                const padX = cellW * 0.2; 
-                const padY = cellH * 0.2;
-                
-                const imgData = ctx.getImageData(
-                    (c*cellW)+padX, (r*cellH)+padY, 
-                    cellW-(padX*2), cellH-(padY*2)
-                );
-                
-                // Create a "Signature" (Hash) of the image
-                // We turn it into High Contrast Black/White string
-                const sig = getSignature(imgData);
-                cellSignatures[r][c] = sig;
+        // 5. Update UI
+        drawDebugOverlay();
 
-                // Check Memory
-                if (templateLibrary[sig] !== undefined) {
-                    gridData[r][c] = templateLibrary[sig];
-                    cellInput.value = templateLibrary[sig] || '';
-                    if(templateLibrary[sig] > 0) cellInput.classList.add('active');
-                } else {
-                    // It's a non-empty looking cell but we don't know the number
-                    if(sig.length > 10) { // If sig length is tiny, it's likely a blank cell
-                        // Check if we already queued this exact shape
-                        if (!unknownQueue.find(q => q.sig === sig)) {
-                            unknownQueue.push({ sig, r, c, w: cellW, h: cellH });
-                        }
-                    } else {
-                        // It's blank
-                        templateLibrary[sig] = 0; 
-                    }
-                }
-            }
-        }
-
-        // 2. HANDLE RESULTS
-        if (unknownQueue.length > 0) {
+        if (trainingQueue.length > 0) {
+            document.getElementById('status').innerText = `New shapes found! Training needed.`;
             startTraining();
         } else {
-            solveBoard();
+            solve();
         }
     }
 
-    // --- IMAGE PROCESSING ---
-    function getSignature(imgData) {
-        let binaryString = "";
+    // --- BLOB DETECTION ALGORITHM (Flood Fill) ---
+    function detectBlobs(imgData, threshold) {
+        const w = imgData.width;
+        const h = imgData.height;
         const d = imgData.data;
-        let hasContent = false;
-        
-        // Simple downsampling: Skip pixels to make hash smaller/faster
-        // and convert to 1 (Bright) or 0 (Dark)
-        for (let i = 0; i < d.length; i += 4 * 2) { // Step by 2 pixels
-            const r=d[i], g=d[i+1], b=d[i+2];
-            const bright = (r+g+b)/3;
-            if (bright > THRESHOLD) {
-                binaryString += "1";
-                hasContent = true;
-            } else {
-                binaryString += "0";
-            }
-        }
-        return hasContent ? binaryString : "empty";
-    }
+        const visited = new Uint8Array(w * h);
+        const foundBlobs = [];
 
-    // --- TRAINING MODE ---
-    let trainingIndex = 0;
-    
-    function startTraining() {
-        trainingIndex = 0;
-        showTrainingModal();
-    }
+        // Stack-based flood fill to avoid recursion limits
+        const stack = []; 
 
-    function showTrainingModal() {
-        if (trainingIndex >= unknownQueue.length) {
-            // Done training
-            document.getElementById('trainModal').style.display = 'none';
-            localStorage.setItem('sum10_templates', JSON.stringify(templateLibrary));
-            
-            // Refill grid data based on new knowledge
-            for(let r=0; r<ROWS; r++){
-                for(let c=0; c<COLS; c++){
-                    const sig = cellSignatures[r][c];
-                    if(templateLibrary[sig] !== undefined) {
-                        gridData[r][c] = templateLibrary[sig];
-                        const input = document.getElementById(`mini-${r}-${c}`);
-                        input.value = templateLibrary[sig] || '';
-                        if(templateLibrary[sig]) input.classList.add('active');
+        for (let y = 0; y < h; y+=2) { // Skip every other row for speed
+            for (let x = 0; x < w; x+=2) {
+                const idx = (y * w + x);
+                if (visited[idx]) continue;
+
+                // Simple brightness check
+                const r=d[idx*4], g=d[idx*4+1], b=d[idx*4+2];
+                if ((r+g+b)/3 > threshold) {
+                    
+                    // Found a bright pixel, start flood fill
+                    let minX=x, maxX=x, minY=y, maxY=y;
+                    stack.push(idx);
+                    visited[idx] = 1;
+
+                    while(stack.length > 0) {
+                        const curr = stack.pop();
+                        const cy = Math.floor(curr / w);
+                        const cx = curr % w;
+
+                        if (cx < minX) minX = cx;
+                        if (cx > maxX) maxX = cx;
+                        if (cy < minY) minY = cy;
+                        if (cy > maxY) maxY = cy;
+
+                        // Check neighbors (4-way)
+                        const neighbors = [curr-1, curr+1, curr-w, curr+w];
+                        for(let n of neighbors) {
+                            if (n >= 0 && n < visited.length && visited[n] === 0) {
+                                const nr=d[n*4], ng=d[n*4+1], nb=d[n*4+2];
+                                // If neighbor is also bright
+                                if ((nr+ng+nb)/3 > threshold) {
+                                    visited[n] = 1;
+                                    stack.push(n);
+                                }
+                            }
+                        }
+                    }
+
+                    // Filter Noise
+                    const width = maxX - minX;
+                    const height = maxY - minY;
+                    // Must be reasonable size to be a number
+                    if (width > 4 && height > 8 && width < 100 && height < 100) {
+                        foundBlobs.push({ x: minX, y: minY, w: width, h: height });
                     }
                 }
             }
-            solveBoard();
+        }
+        return foundBlobs;
+    }
+
+    // --- MAP COORDINATES TO 10x15 GRID ---
+    function mapBlobsToGrid(rawBlobs, imgW, imgH) {
+        let newGrid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+        
+        if (rawBlobs.length === 0) return newGrid;
+
+        // Find bounds of the "Game Board" based on blobs
+        let minX=imgW, maxX=0, minY=imgH, maxY=0;
+        rawBlobs.forEach(b => {
+            if(b.x < minX) minX = b.x;
+            if(b.x + b.w > maxX) maxX = b.x + b.w;
+            if(b.y < minY) minY = b.y;
+            if(b.y + b.h > maxY) maxY = b.y + b.h;
+        });
+
+        // Add a tiny buffer
+        const boardW = maxX - minX;
+        const boardH = maxY - minY;
+        const cellW = boardW / COLS;
+        const cellH = boardH / ROWS;
+
+        rawBlobs.forEach(b => {
+            const centerX = b.x + b.w/2;
+            const centerY = b.y + b.h/2;
+
+            // Calculate grid index relative to board bounds
+            const c = Math.floor((centerX - minX) / cellW);
+            const r = Math.floor((centerY - minY) / cellH);
+
+            if(r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                // Attach grid info to blob for later use
+                b.gridR = r;
+                b.gridC = c;
+            }
+        });
+        
+        return newGrid; // We fill values in next step
+    }
+
+    // --- IDENTIFY & MATCHING ---
+    function identifyNumbers() {
+        const ctx = document.getElementById('imgCanvas').getContext('2d');
+
+        blobs.forEach(b => {
+            if(b.gridR === undefined) return; // Blob outside grid logic
+
+            // Extract Pixel Data of just this blob
+            // We resize to 20x20 for consistent comparison
+            const tempC = document.createElement('canvas');
+            tempC.width = 20; tempC.height = 20;
+            const tCtx = tempC.getContext('2d');
+            
+            tCtx.drawImage(document.getElementById('imgCanvas'), 
+                b.x, b.y, b.w, b.h, 
+                0, 0, 20, 20
+            );
+
+            // Create Hash (Signature)
+            const sig = createSignature(tCtx.getImageData(0,0,20,20));
+            b.signature = sig;
+
+            if (templates[sig] !== undefined) {
+                // Known number
+                gridData[b.gridR][b.gridC] = templates[sig];
+            } else {
+                // Unknown
+                trainingQueue.push(b);
+            }
+        });
+    }
+
+    function createSignature(imgData) {
+        // Convert 20x20 image to simple binary string
+        let sig = "";
+        const d = imgData.data;
+        for(let i=0; i<d.length; i+=4) {
+            // High contrast check
+            sig += (d[i] > 100) ? "1" : "0";
+        }
+        return sig;
+    }
+
+    // --- TRAINING UI ---
+    function startTraining() {
+        if(trainingQueue.length === 0) {
+            document.getElementById('trainModal').style.display = 'none';
+            localStorage.setItem('sum10_blobs', JSON.stringify(templates));
+            solve();
             return;
         }
 
-        const item = unknownQueue[trainingIndex];
+        const b = trainingQueue[0];
         const modal = document.getElementById('trainModal');
-        const canvas = document.getElementById('trainCanvas');
+        const tCanvas = document.getElementById('trainCanvas');
+        const tCtx = tCanvas.getContext('2d');
         const input = document.getElementById('trainInput');
-        
+
+        tCanvas.width = b.w; tCanvas.height = b.h;
+        tCtx.drawImage(document.getElementById('imgCanvas'), b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+
         modal.style.display = 'flex';
-        
-        // Draw the unknown shape onto the modal canvas
-        canvas.width = item.w;
-        canvas.height = item.h;
-        const mainCtx = document.getElementById('gameCanvas').getContext('2d');
-        // We grab from main canvas again to show user
-        // Note: we grab full cell for visibility
-        canvas.getContext('2d').drawImage(
-            document.getElementById('gameCanvas'),
-            item.c * item.w, item.r * item.h, item.w, item.h,
-            0, 0, item.w, item.h
-        );
-        
         input.value = '';
         input.focus();
     }
 
-    function submitTraining() {
+    function saveTraining() {
         const val = parseInt(document.getElementById('trainInput').value);
-        if (isNaN(val)) return; // Must be number
-        
-        const currentSig = unknownQueue[trainingIndex].sig;
-        templateLibrary[currentSig] = val;
-        
-        trainingIndex++;
-        showTrainingModal();
+        if(isNaN(val)) return;
+
+        // Save for ALL items in queue with same signature (bulk solve)
+        const sig = trainingQueue[0].signature;
+        templates[sig] = val;
+
+        // Remove processed items from queue
+        trainingQueue = trainingQueue.filter(item => item.signature !== sig);
+        startTraining(); // Next
     }
 
-    function skipTraining() {
-        const currentSig = unknownQueue[trainingIndex].sig;
-        templateLibrary[currentSig] = 0; // Mark as blank/garbage
-        trainingIndex++;
-        showTrainingModal();
-    }
-    
-    // Enter key support for modal
     document.getElementById('trainInput').addEventListener("keypress", function(event) {
-        if (event.key === "Enter") submitTraining();
+        if (event.key === "Enter") saveTraining();
     });
 
-    // --- SOLVER LOGIC ---
-    function solveBoard() {
+    // --- SOLVER ---
+    function solve() {
+        // Clear Overlay
+        drawDebugOverlay(); // Redraws detected boxes
         const ctx = document.getElementById('overlayCanvas').getContext('2d');
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         
-        let bestMatch = null;
-        let bestScore = -1;
+        let best = null;
+        let maxScore = -1;
 
-        // Find greedy best match
+        // Greedy Algo
         for (let r1 = 0; r1 < ROWS; r1++) {
             for (let c1 = 0; c1 < COLS; c1++) {
                 for (let r2 = r1; r2 < ROWS; r2++) {
                     for (let c2 = c1; c2 < COLS; c2++) {
-                        
-                        let sum = 0;
+                        let s = 0;
                         let count = 0;
-                        
                         for(let i=r1; i<=r2; i++){
                             for(let j=c1; j<=c2; j++){
                                 let v = gridData[i][j];
-                                sum += v;
-                                if(v > 0) count++;
+                                s += v;
+                                if(v>0) count++;
                             }
                         }
-
-                        if(sum === 10 && count > 0) {
-                            // Score: Count is King. Break ties with Area.
-                            let score = (count * 100) + ((r2-r1+1)*(c2-c1+1));
-                            
-                            if(score > bestScore) {
-                                bestScore = score;
-                                bestMatch = { r1, c1, r2, c2, count };
+                        if (s === 10 && count > 0) {
+                            let score = count * 1000 + ((r2-r1)*(c2-c1));
+                            if (score > maxScore) {
+                                maxScore = score;
+                                best = { r1, c1, r2, c2, count };
                             }
                         }
                     }
@@ -324,63 +365,87 @@
             }
         }
 
-        currentBestMove = bestMatch;
-        const btn = document.getElementById('actionBtn');
+        const btn = document.getElementById('solveBtn');
+        if (best) {
+            currentMove = best;
+            document.getElementById('status').innerText = `Best Match: Clears ${best.count} numbers!`;
+            
+            // Highlight Move
+            // Convert Grid Coords back to Pixel Coords roughly
+            // We use the min/max from blobs to estimate cell size again
+            // Or simpler: Find bounding box of blobs involved
+            
+            // Re-calculate bounds
+            let minX=99999, maxX=0, minY=99999, maxY=0;
+            blobs.forEach(b => {
+                if(b.x < minX) minX = b.x;
+                if(b.x+b.w > maxX) maxX = b.x+b.w;
+                if(b.y < minY) minY = b.y;
+                if(b.y+b.h > maxY) maxY = b.y+b.h;
+            });
+            const cellW = (maxX-minX)/COLS;
+            const cellH = (maxY-minY)/ROWS;
 
-        if (bestMatch) {
-            highlightMove(bestMatch);
-            document.getElementById('status').innerText = `Ready! Best move clears ${bestMatch.count} numbers.`;
-            btn.innerHTML = `MATCH DONE<br><span style='font-size:0.7em; font-weight:normal'>Click to find next</span>`;
+            const rx = minX + (best.c1 * cellW);
+            const ry = minY + (best.r1 * cellH);
+            const rw = ((best.c2 - best.c1 + 1) * cellW);
+            const rh = ((best.r2 - best.r1 + 1) * cellH);
+
+            ctx.strokeStyle = "#00ff00";
+            ctx.lineWidth = 5;
+            ctx.strokeRect(rx, ry, rw, rh);
+            ctx.fillStyle = "rgba(0,255,0,0.3)";
+            ctx.fillRect(rx, ry, rw, rh);
+
             btn.disabled = false;
+            btn.innerHTML = `DONE (Found ${best.count} tiles)`;
         } else {
-            document.getElementById('status').innerText = "No moves left.";
-            btn.innerText = "NO MOVES FOUND";
+            document.getElementById('status').innerText = "No moves found.";
             btn.disabled = true;
+            btn.innerText = "NO MOVES";
         }
     }
 
-    function highlightMove(m) {
-        const canvas = document.getElementById('overlayCanvas');
-        const ctx = canvas.getContext('2d');
-        const cellW = canvas.width / COLS;
-        const cellH = canvas.height / ROWS;
+    function drawDebugOverlay() {
+        const ctx = document.getElementById('overlayCanvas').getContext('2d');
+        ctx.clearRect(0,0, ctx.canvas.width, ctx.canvas.height);
+        
+        ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+        ctx.lineWidth = 1;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+        ctx.font = "10px monospace";
 
-        const x = m.c1 * cellW;
-        const y = m.r1 * cellH;
-        const w = (m.c2 - m.c1 + 1) * cellW;
-        const h = (m.r2 - m.r1 + 1) * cellH;
-
-        ctx.fillStyle = "rgba(0, 255, 0, 0.4)";
-        ctx.strokeStyle = "#00ff00";
-        ctx.lineWidth = 4;
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeRect(x, y, w, h);
+        blobs.forEach(b => {
+            // Draw box around detected blob
+            ctx.strokeRect(b.x, b.y, b.w, b.h);
+            
+            // Draw number if known
+            if (gridData[b.gridR] && gridData[b.gridR][b.gridC] > 0) {
+                 ctx.fillText(gridData[b.gridR][b.gridC], b.x, b.y - 2);
+            }
+        });
     }
 
     function confirmMove() {
-        if(!currentBestMove) return;
-        
-        // Clear cells in data
-        const m = currentBestMove;
-        for(let r=m.r1; r<=m.r2; r++){
-            for(let c=m.c1; c<=m.c2; c++){
+        if(!currentMove) return;
+        // Zero out data
+        for(let r=currentMove.r1; r<=currentMove.r2; r++){
+            for(let c=currentMove.c1; c<=currentMove.c2; c++){
                 gridData[r][c] = 0;
-                document.getElementById(`mini-${r}-${c}`).value = '';
-                document.getElementById(`mini-${r}-${c}`).classList.remove('active');
             }
         }
-        
-        // Find next
-        solveBoard();
+        // Remove blobs from visuals that were in that range to prevent re-finding
+        // Actually, easiest is just to re-run solve on updated gridData
+        solve();
     }
 
-    function clearMemory() {
-        if(confirm("Are you sure? You will have to teach it the numbers again.")) {
-            localStorage.removeItem('sum10_templates');
-            templateLibrary = {};
+    function clearData() {
+        if(confirm("Reset all learned numbers?")) {
+            localStorage.removeItem('sum10_blobs');
             location.reload();
         }
     }
+
 </script>
 </body>
 </html>
