@@ -3,67 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Auto-Detector</title>
+    <title>Sum-10 Fuzzy Solver</title>
     <style>
-        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00bcd4; --green: #4caf50; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #2979ff; --green: #00e676; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #eee; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
-        h2 { color: var(--accent); margin-bottom: 5px; }
-        .instructions { color: #888; font-size: 0.9em; margin-bottom: 20px; text-align: center; }
-
-        .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
-
-        /* Left: The Image Stage */
-        .stage { position: relative; border: 2px solid #333; min-width: 300px; min-height: 200px; background: #000; display: flex; justify-content: center; align-items: center; }
-        .stage canvas { display: block; max-width: 100%; }
+        .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; margin-top: 20px; }
+        
+        /* Image Stage */
+        .stage { position: relative; border: 2px solid #333; background: #000; min-width: 300px; min-height: 200px; display: flex; justify-content: center; align-items: center; }
         #overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
         .placeholder { color: #555; pointer-events: none; }
 
-        /* Right: Controls */
-        .panel { background: var(--panel); padding: 20px; border-radius: 8px; width: 320px; }
+        /* Controls */
+        .panel { background: var(--panel); padding: 20px; border-radius: 8px; width: 340px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .status { color: #ffeb3b; font-style: italic; margin-bottom: 10px; min-height: 1.2em; }
         
-        .btn { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; transition: 0.2s; }
-        .btn-green { background: var(--green); color: white; }
-        .btn-green:hover { background: #43a047; }
-        .btn-green:disabled { background: #333; color: #666; cursor: default; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.2s; background: #333; color: #aaa; }
+        .btn.ready { background: var(--green); color: #000; }
+        .btn.ready:hover { transform: scale(1.02); }
 
-        .slider-group { margin-bottom: 15px; }
-        .slider-group label { display: flex; justify-content: space-between; font-size: 0.85em; color: #aaa; margin-bottom: 5px; }
+        .slider-row { display: flex; justify-content: space-between; font-size: 0.8em; color: #888; margin-top: 15px; }
         input[type=range] { width: 100%; }
 
-        /* Training Modal */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 999; }
-        .modal-box { background: #222; padding: 30px; border-radius: 12px; text-align: center; border: 1px solid #444; }
-        .train-view { transform: scale(4); margin: 20px; border: 1px solid #666; image-rendering: pixelated; }
-        .train-input { font-size: 24px; width: 50px; text-align: center; padding: 5px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
+        /* Modal */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 999; }
+        .modal-box { background: #222; padding: 25px; border-radius: 10px; text-align: center; border: 1px solid #444; box-shadow: 0 0 50px black; }
+        .train-view { width: 64px; height: 64px; image-rendering: pixelated; border: 1px solid #555; margin: 15px; }
+        .train-input { font-size: 30px; width: 60px; text-align: center; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
     </style>
 </head>
 <body>
 
-    <h2>AZX minigame</h2>
-    <div class="instructions">Paste Screenshot (Ctrl+V).<br>If numbers aren't detecting, adjust the "Brightness Threshold".</div>
+    <h2 style="color:var(--accent); margin:0;">AZX minigame</h2>
+    <div style="font-size:0.8em; color:#777; margin-bottom:10px;">Robust maybe</div>
 
     <div class="layout">
         <div class="stage" id="stage">
-            <span class="placeholder">Paste Image Here</span>
+            <span class="placeholder">Paste Screenshot (Ctrl+V)</span>
             <canvas id="imgCanvas" style="display:none"></canvas>
             <canvas id="overlayCanvas"></canvas>
         </div>
 
         <div class="panel">
-            <div class="slider-group">
-                <label>Brightness Threshold <span id="threshVal">150</span></label>
-                <input type="range" id="threshold" min="50" max="250" value="150" oninput="reprocess()">
+            <div id="status" class="status">Waiting for image...</div>
+
+            <button id="mainBtn" class="btn" disabled onclick="confirmMove()">...</button>
+
+            <div class="slider-row">
+                <span>Brightness Threshold</span>
+                <span id="threshVal">130</span>
             </div>
-
-            <div id="status" style="color: #ffd700; min-height: 1.2em; font-size: 0.9em;">Waiting...</div>
-
-            <button id="solveBtn" class="btn btn-green" disabled onclick="confirmMove()">
-                SOLVE
-            </button>
+            <input type="range" id="threshold" min="50" max="230" value="130" oninput="reprocess()">
             
-            <div style="margin-top: 20px; font-size: 0.8em; color: #666; text-align: center; cursor: pointer;" onclick="clearData()">
-                [ Reset Learned Numbers ]
+            <div style="margin-top:20px; text-align:center; font-size:0.8em; color:#555; cursor:pointer;" onclick="resetMemory()">
+                [ Clear Memory ]
             </div>
         </div>
     </div>
@@ -71,30 +65,34 @@
     <!-- Training Modal -->
     <div id="trainModal" class="modal">
         <div class="modal-box">
-            <h3 style="margin:0 0 10px 0;">New Number Shape</h3>
-            <p style="color:#aaa; font-size:0.9em;">What number is this?</p>
+            <h3 id="modalTitle">New Shape</h3>
             <canvas id="trainCanvas" class="train-view"></canvas>
             <br>
             <input type="number" id="trainInput" class="train-input" min="0" max="9">
             <br><br>
-            <button class="btn btn-green" onclick="saveTraining()">Save</button>
+            <button class="btn ready" style="padding:10px" onclick="saveTraining()">Save</button>
         </div>
     </div>
 
 <script>
-    // CONSTANTS
+    // --- CONFIG ---
     const ROWS = 15;
     const COLS = 10;
+    const SAMPLE_SIZE = 16; // We resize all numbers to 16x16 to compare them
+    const MATCH_TOLERANCE = 40; // Lower = stricter, Higher = looser (0-255 scale average)
     
-    // STATE
+    // --- STATE ---
     let srcImage = null;
-    let gridData = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-    let blobs = []; // Holds the detected number coordinates
-    let templates = JSON.parse(localStorage.getItem('sum10_blobs')) || {};
+    let gridData = [];
+    let blobs = [];
     let trainingQueue = [];
     let currentMove = null;
+    
+    // Load learned shapes from LocalStorage
+    // Structure: [ { label: 5, data: [0, 255, 12, ...] }, ... ]
+    let memory = JSON.parse(localStorage.getItem('sum10_fuzzy_mem')) || [];
 
-    // --- PASTE HANDLER ---
+    // --- PASTE LISTENER ---
     window.addEventListener('paste', e => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let item of items) {
@@ -107,255 +105,271 @@
         }
     });
 
-    // --- MAIN PIPELINE ---
+    // --- PIPELINE ---
     function reprocess() {
         if(!srcImage) return;
+        
+        // UI Setup
         document.querySelector('.placeholder').style.display = 'none';
         document.getElementById('imgCanvas').style.display = 'block';
+        document.getElementById('threshVal').innerText = document.getElementById('threshold').value;
 
-        const thresh = parseInt(document.getElementById('threshold').value);
-        document.getElementById('threshVal').innerText = thresh;
-
-        // 1. Draw Image
+        // Draw Image
         const canvas = document.getElementById('imgCanvas');
-        const overlay = document.getElementById('overlayCanvas');
         canvas.width = srcImage.width; canvas.height = srcImage.height;
-        overlay.width = srcImage.width; overlay.height = srcImage.height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(srcImage, 0, 0);
 
-        // 2. Find Blobs (The Numbers)
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        blobs = detectBlobs(imgData, thresh);
+        // Resize Overlay
+        const overlay = document.getElementById('overlayCanvas');
+        overlay.width = srcImage.width; overlay.height = srcImage.height;
 
-        // 3. Map Blobs to Grid
-        gridData = mapBlobsToGrid(blobs, canvas.width, canvas.height);
+        // 1. Find Blobs (Islands of white pixels)
+        const thresh = parseInt(document.getElementById('threshold').value);
+        blobs = detectBlobs(ctx, canvas.width, canvas.height, thresh);
 
-        // 4. Identify Numbers (or Queue for training)
+        // 2. Map Blobs to 10x15 Grid
+        gridData = mapBlobsToGrid(blobs);
+
+        // 3. Recognize Numbers (Fuzzy Matching)
         trainingQueue = [];
-        identifyNumbers();
+        blobs.forEach(b => {
+            if(b.gridR === null) return; // Ignore noise outside grid
+            
+            // Extract features (16x16 pixel array)
+            const features = extractFeatures(ctx, b);
+            
+            // Compare against memory
+            const match = findBestMatch(features);
 
-        // 5. Update UI
-        drawDebugOverlay();
+            if (match && match.diff < MATCH_TOLERANCE) {
+                // High confidence match
+                gridData[b.gridR][b.gridC] = match.label;
+            } else {
+                // Unknown or low confidence -> Train
+                trainingQueue.push({ blob: b, features: features, bestGuess: match });
+            }
+        });
 
+        // 4. Handle Next Steps
+        drawDebug();
+        
         if (trainingQueue.length > 0) {
-            document.getElementById('status').innerText = `New shapes found! Training needed.`;
             startTraining();
         } else {
             solve();
         }
     }
 
-    // --- BLOB DETECTION ALGORITHM (Flood Fill) ---
-    function detectBlobs(imgData, threshold) {
-        const w = imgData.width;
-        const h = imgData.height;
+    // --- 1. BLOB DETECTION (Flood Fill) ---
+    function detectBlobs(ctx, w, h, threshold) {
+        const imgData = ctx.getImageData(0, 0, w, h);
         const d = imgData.data;
         const visited = new Uint8Array(w * h);
-        const foundBlobs = [];
+        const found = [];
 
-        // Stack-based flood fill to avoid recursion limits
-        const stack = []; 
-
-        for (let y = 0; y < h; y+=2) { // Skip every other row for speed
-            for (let x = 0; x < w; x+=2) {
-                const idx = (y * w + x);
-                if (visited[idx]) continue;
-
-                // Simple brightness check
-                const r=d[idx*4], g=d[idx*4+1], b=d[idx*4+2];
-                if ((r+g+b)/3 > threshold) {
-                    
-                    // Found a bright pixel, start flood fill
-                    let minX=x, maxX=x, minY=y, maxY=y;
-                    stack.push(idx);
+        for(let y=0; y<h; y+=2) { // Skip lines for speed
+            for(let x=0; x<w; x+=2) {
+                const idx = (y*w + x);
+                if(visited[idx]) continue;
+                
+                // Check brightness
+                if ((d[idx*4] + d[idx*4+1] + d[idx*4+2])/3 > threshold) {
+                    // Start Flood
+                    let stack = [idx];
                     visited[idx] = 1;
+                    let minX=x, maxX=x, minY=y, maxY=y;
+                    
+                    while(stack.length) {
+                        const cur = stack.pop();
+                        const cy = Math.floor(cur/w);
+                        const cx = cur%w;
+                        
+                        if(cx < minX) minX = cx;
+                        if(cx > maxX) maxX = cx;
+                        if(cy < minY) minY = cy;
+                        if(cy > maxY) maxY = cy;
 
-                    while(stack.length > 0) {
-                        const curr = stack.pop();
-                        const cy = Math.floor(curr / w);
-                        const cx = curr % w;
-
-                        if (cx < minX) minX = cx;
-                        if (cx > maxX) maxX = cx;
-                        if (cy < minY) minY = cy;
-                        if (cy > maxY) maxY = cy;
-
-                        // Check neighbors (4-way)
-                        const neighbors = [curr-1, curr+1, curr-w, curr+w];
+                        // Check neighbors (Right, Down, Left, Up)
+                        const neighbors = [cur+1, cur+w, cur-1, cur-w];
                         for(let n of neighbors) {
-                            if (n >= 0 && n < visited.length && visited[n] === 0) {
-                                const nr=d[n*4], ng=d[n*4+1], nb=d[n*4+2];
-                                // If neighbor is also bright
-                                if ((nr+ng+nb)/3 > threshold) {
+                            if(n>=0 && n<visited.length && !visited[n]) {
+                                if((d[n*4]+d[n*4+1]+d[n*4+2])/3 > threshold) {
                                     visited[n] = 1;
                                     stack.push(n);
                                 }
                             }
                         }
                     }
-
-                    // Filter Noise
-                    const width = maxX - minX;
-                    const height = maxY - minY;
-                    // Must be reasonable size to be a number
-                    if (width > 4 && height > 8 && width < 100 && height < 100) {
-                        foundBlobs.push({ x: minX, y: minY, w: width, h: height });
+                    
+                    // Filter noise (tiny dots or huge blocks)
+                    const bw = maxX - minX;
+                    const bh = maxY - minY;
+                    if(bw > 5 && bh > 8 && bw < 100 && bh < 100) {
+                        found.push({ x:minX, y:minY, w:bw, h:bh });
                     }
                 }
             }
         }
-        return foundBlobs;
+        return found;
     }
 
-    // --- MAP COORDINATES TO 10x15 GRID ---
-    function mapBlobsToGrid(rawBlobs, imgW, imgH) {
-        let newGrid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-        
-        if (rawBlobs.length === 0) return newGrid;
+    // --- 2. GRID MAPPING ---
+    function mapBlobsToGrid(rawBlobs) {
+        let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+        if(rawBlobs.length === 0) return grid;
 
-        // Find bounds of the "Game Board" based on blobs
-        let minX=imgW, maxX=0, minY=imgH, maxY=0;
-        rawBlobs.forEach(b => {
-            if(b.x < minX) minX = b.x;
-            if(b.x + b.w > maxX) maxX = b.x + b.w;
-            if(b.y < minY) minY = b.y;
-            if(b.y + b.h > maxY) maxY = b.y + b.h;
-        });
+        // Calculate Bounds
+        let minX = Math.min(...rawBlobs.map(b => b.x));
+        let maxX = Math.max(...rawBlobs.map(b => b.x + b.w));
+        let minY = Math.min(...rawBlobs.map(b => b.y));
+        let maxY = Math.max(...rawBlobs.map(b => b.y + b.h));
 
-        // Add a tiny buffer
-        const boardW = maxX - minX;
-        const boardH = maxY - minY;
-        const cellW = boardW / COLS;
-        const cellH = boardH / ROWS;
+        const cellW = (maxX - minX) / COLS;
+        const cellH = (maxY - minY) / ROWS;
 
         rawBlobs.forEach(b => {
-            const centerX = b.x + b.w/2;
-            const centerY = b.y + b.h/2;
-
-            // Calculate grid index relative to board bounds
-            const c = Math.floor((centerX - minX) / cellW);
-            const r = Math.floor((centerY - minY) / cellH);
-
-            if(r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-                // Attach grid info to blob for later use
-                b.gridR = r;
-                b.gridC = c;
-            }
-        });
-        
-        return newGrid; // We fill values in next step
-    }
-
-    // --- IDENTIFY & MATCHING ---
-    function identifyNumbers() {
-        const ctx = document.getElementById('imgCanvas').getContext('2d');
-
-        blobs.forEach(b => {
-            if(b.gridR === undefined) return; // Blob outside grid logic
-
-            // Extract Pixel Data of just this blob
-            // We resize to 20x20 for consistent comparison
-            const tempC = document.createElement('canvas');
-            tempC.width = 20; tempC.height = 20;
-            const tCtx = tempC.getContext('2d');
+            const cx = b.x + b.w/2;
+            const cy = b.y + b.h/2;
+            const c = Math.floor((cx - minX) / cellW);
+            const r = Math.floor((cy - minY) / cellH);
             
-            tCtx.drawImage(document.getElementById('imgCanvas'), 
-                b.x, b.y, b.w, b.h, 
-                0, 0, 20, 20
-            );
-
-            // Create Hash (Signature)
-            const sig = createSignature(tCtx.getImageData(0,0,20,20));
-            b.signature = sig;
-
-            if (templates[sig] !== undefined) {
-                // Known number
-                gridData[b.gridR][b.gridC] = templates[sig];
+            if(r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                b.gridR = r; 
+                b.gridC = c;
             } else {
-                // Unknown
-                trainingQueue.push(b);
+                b.gridR = null; // Noise
             }
         });
+        return grid;
     }
 
-    function createSignature(imgData) {
-        // Convert 20x20 image to simple binary string
-        let sig = "";
-        const d = imgData.data;
-        for(let i=0; i<d.length; i+=4) {
-            // High contrast check
-            sig += (d[i] > 100) ? "1" : "0";
+    // --- 3. FEATURE EXTRACTION (Downsampling) ---
+    function extractFeatures(ctx, b) {
+        // Create a temp canvas to normalize size
+        const temp = document.createElement('canvas');
+        temp.width = SAMPLE_SIZE;
+        temp.height = SAMPLE_SIZE;
+        const tCtx = temp.getContext('2d');
+
+        // Draw the blob stretched to 16x16
+        // This makes a "1" look the same whether it's 20px tall or 22px tall
+        tCtx.drawImage(ctx.canvas, b.x, b.y, b.w, b.h, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
+        
+        // Get grayscale values
+        const pixels = tCtx.getImageData(0,0, SAMPLE_SIZE, SAMPLE_SIZE).data;
+        const featureArray = [];
+        for(let i=0; i<pixels.length; i+=4) {
+            featureArray.push(pixels[i]); // Just take Red channel (grayscale anyway)
         }
-        return sig;
+        return featureArray;
     }
 
-    // --- TRAINING UI ---
+    // --- 4. FUZZY MATCHING (Euclidean-ish Distance) ---
+    function findBestMatch(features) {
+        if(memory.length === 0) return null;
+
+        let best = null;
+        let minDiff = Infinity;
+
+        memory.forEach(template => {
+            let diff = 0;
+            // Compare pixel by pixel
+            for(let i=0; i<features.length; i++) {
+                diff += Math.abs(features[i] - template.data[i]);
+            }
+            // Average difference per pixel
+            diff = diff / features.length;
+
+            if(diff < minDiff) {
+                minDiff = diff;
+                best = template;
+            }
+        });
+
+        return { label: best ? best.label : null, diff: minDiff };
+    }
+
+    // --- 5. TRAINING UI ---
     function startTraining() {
         if(trainingQueue.length === 0) {
             document.getElementById('trainModal').style.display = 'none';
-            localStorage.setItem('sum10_blobs', JSON.stringify(templates));
-            solve();
+            // Save memory
+            localStorage.setItem('sum10_fuzzy_mem', JSON.stringify(memory));
+            // Re-run with new knowledge
+            reprocess(); 
             return;
         }
 
-        const b = trainingQueue[0];
+        const item = trainingQueue[0];
         const modal = document.getElementById('trainModal');
-        const tCanvas = document.getElementById('trainCanvas');
-        const tCtx = tCanvas.getContext('2d');
+        const title = document.getElementById('modalTitle');
         const input = document.getElementById('trainInput');
-
-        tCanvas.width = b.w; tCanvas.height = b.h;
-        tCtx.drawImage(document.getElementById('imgCanvas'), b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
-
+        
         modal.style.display = 'flex';
+        
+        // Draw preview
+        const tCanv = document.getElementById('trainCanvas');
+        tCanv.width = item.blob.w; tCanv.height = item.blob.h;
+        tCanv.getContext('2d').drawImage(document.getElementById('imgCanvas'), 
+            item.blob.x, item.blob.y, item.blob.w, item.blob.h, 
+            0, 0, item.blob.w, item.blob.h
+        );
+
+        // Auto-suggest?
         input.value = '';
+        if (item.bestGuess && item.bestGuess.diff < (MATCH_TOLERANCE * 1.5)) {
+             title.innerText = `Is this a ${item.bestGuess.label}?`;
+             input.value = item.bestGuess.label;
+        } else {
+            title.innerText = "What number is this?";
+        }
+        
         input.focus();
+        input.select();
     }
 
     function saveTraining() {
         const val = parseInt(document.getElementById('trainInput').value);
         if(isNaN(val)) return;
 
-        // Save for ALL items in queue with same signature (bulk solve)
-        const sig = trainingQueue[0].signature;
-        templates[sig] = val;
+        // Add to memory
+        memory.push({
+            label: val,
+            data: trainingQueue[0].features
+        });
 
-        // Remove processed items from queue
-        trainingQueue = trainingQueue.filter(item => item.signature !== sig);
-        startTraining(); // Next
+        trainingQueue.shift();
+        startTraining();
     }
-
-    document.getElementById('trainInput').addEventListener("keypress", function(event) {
-        if (event.key === "Enter") saveTraining();
+    
+    document.getElementById('trainInput').addEventListener("keydown", (e) => {
+        if(e.key === "Enter") saveTraining();
     });
 
-    // --- SOLVER ---
+    // --- 6. SOLVER (Rectangular Sums) ---
     function solve() {
-        // Clear Overlay
-        drawDebugOverlay(); // Redraws detected boxes
-        const ctx = document.getElementById('overlayCanvas').getContext('2d');
-        
+        const btn = document.getElementById('mainBtn');
         let best = null;
         let maxScore = -1;
 
-        // Greedy Algo
+        // Greedy search
         for (let r1 = 0; r1 < ROWS; r1++) {
             for (let c1 = 0; c1 < COLS; c1++) {
                 for (let r2 = r1; r2 < ROWS; r2++) {
                     for (let c2 = c1; c2 < COLS; c2++) {
-                        let s = 0;
+                        let sum = 0;
                         let count = 0;
                         for(let i=r1; i<=r2; i++){
                             for(let j=c1; j<=c2; j++){
                                 let v = gridData[i][j];
-                                s += v;
+                                sum += v;
                                 if(v>0) count++;
                             }
                         }
-                        if (s === 10 && count > 0) {
-                            let score = count * 1000 + ((r2-r1)*(c2-c1));
-                            if (score > maxScore) {
+                        if(sum === 10 && count > 0) {
+                            let score = (count * 1000) + ((r2-r1)*(c2-c1));
+                            if(score > maxScore) {
                                 maxScore = score;
                                 best = { r1, c1, r2, c2, count };
                             }
@@ -365,87 +379,83 @@
             }
         }
 
-        const btn = document.getElementById('solveBtn');
-        if (best) {
-            currentMove = best;
-            document.getElementById('status').innerText = `Best Match: Clears ${best.count} numbers!`;
-            
-            // Highlight Move
-            // Convert Grid Coords back to Pixel Coords roughly
-            // We use the min/max from blobs to estimate cell size again
-            // Or simpler: Find bounding box of blobs involved
-            
-            // Re-calculate bounds
-            let minX=99999, maxX=0, minY=99999, maxY=0;
-            blobs.forEach(b => {
+        currentMove = best;
+        
+        if(best) {
+            document.getElementById('status').innerText = `Best Move: Clears ${best.count} numbers!`;
+            btn.innerHTML = `MATCH DONE<br><span style='font-size:0.7em; font-weight:normal'>Click to update</span>`;
+            btn.className = "btn ready";
+            btn.disabled = false;
+            highlight(best);
+        } else {
+            document.getElementById('status').innerText = "No moves found.";
+            btn.innerHTML = "NO MOVES";
+            btn.className = "btn";
+            btn.disabled = true;
+        }
+    }
+
+    function highlight(m) {
+        const ctx = document.getElementById('overlayCanvas').getContext('2d');
+        // Find blobs in this range to draw box
+        let minX=9999, maxX=0, minY=9999, maxY=0;
+        blobs.forEach(b => {
+            if(b.gridR >= m.r1 && b.gridR <= m.r2 && b.gridC >= m.c1 && b.gridC <= m.c2) {
                 if(b.x < minX) minX = b.x;
                 if(b.x+b.w > maxX) maxX = b.x+b.w;
                 if(b.y < minY) minY = b.y;
                 if(b.y+b.h > maxY) maxY = b.y+b.h;
-            });
-            const cellW = (maxX-minX)/COLS;
-            const cellH = (maxY-minY)/ROWS;
+            }
+        });
 
-            const rx = minX + (best.c1 * cellW);
-            const ry = minY + (best.r1 * cellH);
-            const rw = ((best.c2 - best.c1 + 1) * cellW);
-            const rh = ((best.r2 - best.r1 + 1) * cellH);
+        // Fallback if grid mapping was perfect but blobs weird
+        if(minX > maxX) return; 
 
-            ctx.strokeStyle = "#00ff00";
-            ctx.lineWidth = 5;
-            ctx.strokeRect(rx, ry, rw, rh);
-            ctx.fillStyle = "rgba(0,255,0,0.3)";
-            ctx.fillRect(rx, ry, rw, rh);
-
-            btn.disabled = false;
-            btn.innerHTML = `DONE (Found ${best.count} tiles)`;
-        } else {
-            document.getElementById('status').innerText = "No moves found.";
-            btn.disabled = true;
-            btn.innerText = "NO MOVES";
-        }
+        ctx.strokeStyle = "#00e676";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(minX-2, minY-2, (maxX-minX)+4, (maxY-minY)+4);
+        ctx.fillStyle = "rgba(0, 230, 118, 0.3)";
+        ctx.fillRect(minX-2, minY-2, (maxX-minX)+4, (maxY-minY)+4);
     }
 
-    function drawDebugOverlay() {
+    function drawDebug() {
         const ctx = document.getElementById('overlayCanvas').getContext('2d');
         ctx.clearRect(0,0, ctx.canvas.width, ctx.canvas.height);
         
-        ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
-        ctx.lineWidth = 1;
-        ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-        ctx.font = "10px monospace";
-
         blobs.forEach(b => {
-            // Draw box around detected blob
+            if(b.gridR === null) return;
+            // Draw faint box
+            ctx.strokeStyle = "rgba(255, 0, 0, 0.3)";
+            ctx.lineWidth = 1;
             ctx.strokeRect(b.x, b.y, b.w, b.h);
             
-            // Draw number if known
-            if (gridData[b.gridR] && gridData[b.gridR][b.gridC] > 0) {
-                 ctx.fillText(gridData[b.gridR][b.gridC], b.x, b.y - 2);
+            // Draw identified number
+            if(gridData[b.gridR][b.gridC] > 0) {
+                ctx.fillStyle = "yellow";
+                ctx.font = "12px sans-serif";
+                ctx.fillText(gridData[b.gridR][b.gridC], b.x, b.y - 2);
             }
         });
     }
 
     function confirmMove() {
         if(!currentMove) return;
-        // Zero out data
-        for(let r=currentMove.r1; r<=currentMove.r2; r++){
-            for(let c=currentMove.c1; c<=currentMove.c2; c++){
+        // Zero out
+        for(let r=currentMove.r1; r<=currentMove.r2; r++) {
+            for(let c=currentMove.c1; c<=currentMove.c2; c++) {
                 gridData[r][c] = 0;
             }
         }
-        // Remove blobs from visuals that were in that range to prevent re-finding
-        // Actually, easiest is just to re-run solve on updated gridData
-        solve();
+        solve(); // Find next best immediately
     }
 
-    function clearData() {
-        if(confirm("Reset all learned numbers?")) {
-            localStorage.removeItem('sum10_blobs');
+    function resetMemory() {
+        if(confirm("Reset learned numbers?")) {
+            localStorage.removeItem('sum10_fuzzy_mem');
+            memory = [];
             location.reload();
         }
     }
-
 </script>
 </body>
 </html>
