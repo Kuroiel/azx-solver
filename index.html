@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 "No Nag" Solver</title>
+    <title>Sum-10 Optimizer</title>
     <style>
-        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00bcd4; --green: #4caf50; --error: #f44336; }
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --gold: #ffd700; --green: #00c853; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         
         .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
@@ -19,15 +19,16 @@
         .panel { width: 320px; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); }
         .status { font-weight: bold; margin-bottom: 15px; color: var(--accent); min-height: 1.2em; font-size: 0.9em; }
         
-        .btn { width: 100%; padding: 15px; border: none; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; color: #000; transition: 0.2s; background: #555; color: white;}
-        .btn.active { background: var(--green); color: #000; box-shadow: 0 0 10px rgba(76, 175, 80, 0.4); }
+        .btn { width: 100%; padding: 15px; border: none; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; background: #444; color: white; transition: 0.2s;}
+        .btn.active { background: var(--accent); color: #000; box-shadow: 0 0 15px rgba(0, 229, 255, 0.4); }
         .btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none;}
 
         .slider-box { margin: 15px 0; padding: 10px; background: #2a2a2a; border-radius: 4px; border: 1px solid #333; }
         .slider-header { display: flex; justify-content: space-between; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
 
-        .legend { font-size: 0.75em; color: #888; margin-top: 20px; text-align: center; line-height: 1.6; }
-        .key { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #333; color: white; margin: 0 2px; }
+        .legend { margin-top: 20px; font-size: 0.8em; color: #aaa; display: grid; gap: 5px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .box { width: 12px; height: 12px; border: 2px solid white; display: inline-block; }
 
         /* Correction Tooltip */
         .tooltip { position: absolute; background: rgba(0,0,0,0.9); padding: 10px; border: 1px solid #fff; border-radius: 4px; pointer-events: none; display: none; transform: translate(-50%, -100%); margin-top: -10px; text-align: center; z-index: 100;}
@@ -36,15 +37,16 @@
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">ewgeg</h2>
+    <h2 style="color:var(--accent); margin-top:0;">hopeful stakes</h2>
     
     <div class="layout">
         <div class="stage" id="stageContainer">
             <canvas id="mainCanvas"></canvas>
             <canvas id="overlayCanvas"></canvas>
+            <!-- Correction Tooltip -->
             <div id="correctionTooltip" class="tooltip">
                 <canvas id="tooltipCanvas" class="tooltip-img"></canvas>
-                <div>Type correct number</div>
+                <div>Type 1-9</div>
             </div>
         </div>
 
@@ -54,18 +56,14 @@
             <div class="slider-box">
                 <div class="slider-header"><span>Filter Sensitivity</span> <span id="threshVal">180</span></div>
                 <input type="range" id="threshold" min="100" max="250" value="180" style="width:100%" oninput="process()">
-                <div style="font-size:0.7em; color:#777; margin-top:5px;">
-                    Move right if seeing bucket rims.<br>Move left if numbers disappear.
-                </div>
             </div>
 
-            <button id="solveBtn" class="btn" disabled onclick="confirmMove()">SOLVE</button>
+            <button id="solveBtn" class="btn" disabled onclick="applyMoves()">CONFIRM MOVES</button>
             
             <div class="legend">
-                If a number is wrong:<br>
-                <span class="key">Click the number</span> on the image<br>
-                <span class="key">Type new number</span> (1-9)<br>
-                It fixes all similar numbers instantly.
+                <div class="legend-item"><span class="box" style="border-color:var(--gold); background:rgba(255, 215, 0, 0.2)"></span> 3+ Numbers (High Priority)</div>
+                <div class="legend-item"><span class="box" style="border-color:var(--green); background:rgba(0, 200, 83, 0.2)"></span> 2 Numbers (Standard)</div>
+                <div style="margin-top:10px; color:#666;">Click any number on the board to fix it.</div>
             </div>
             
             <div style="margin-top:20px; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
@@ -80,8 +78,7 @@
     const COLS = 10;
     const NORM_SIZE = 16;
     
-    // --- PRE-LOADED GENERIC DIGIT SHAPES (5x7 ASCII ART) ---
-    // This gives the AI a "Baseline" idea of what numbers look like
+    // --- PRE-LOADED SHAPES (ASCII Heuristics) ---
     const ASCII_DIGITS = {
         1: ["  #  "," ##  ","  #  ","  #  ","  #  ","  #  "," ### "],
         2: [" ### ","#   #","    #","   # ","  #  "," #   ","#####"],
@@ -92,16 +89,16 @@
         7: ["#####","    #","   # ","  #  "," #   "," #   "," #   "],
         8: [" ### ","#   #"," ### ","#   #","#   #","#   #"," ### "],
         9: [" ### ","#   #","#   #"," ####","    #","   # "," ### "],
-        0: [" ### ","#   #","#   #","#   #","#   #","#   #"," ### "] // Treat 0 as potential garbage or 0
+        0: [" ### ","#   #","#   #","#   #","#   #","#   #"," ### "]
     };
 
     // --- STATE ---
     let srcImg = null;
     let gridData = [];
     let blobs = [];
-    let currentBest = null;
-    let userMemory = JSON.parse(localStorage.getItem('sum10_quick_mem')) || [];
-    let systemMemory = []; // Generated from ASCII
+    let currentPlan = []; // List of best moves
+    let userMemory = JSON.parse(localStorage.getItem('sum10_opt_mem')) || [];
+    let systemMemory = [];
 
     // --- INIT ---
     generateSystemMemory();
@@ -119,45 +116,34 @@
         }
     });
 
-    // Correction Interaction
+    // Correction Logic
     const stage = document.getElementById('stageContainer');
     const tooltip = document.getElementById('correctionTooltip');
-    let correctionTarget = null; // { blob, index }
+    let correctionTarget = null; 
 
     stage.addEventListener('mousedown', e => {
         if(!srcImg) return;
         const rect = stage.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-
-        // Find clicked blob
-        const clicked = blobs.find(b => 
-            x >= b.x && x <= b.x + b.w && 
-            y >= b.y && y <= b.y + b.h
-        );
+        const clicked = blobs.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
 
         if(clicked) {
             correctionTarget = clicked;
-            // Show Tooltip
             tooltip.style.display = 'block';
             tooltip.style.left = (clicked.x + clicked.w/2) + 'px';
             tooltip.style.top = clicked.y + 'px';
             
-            // Draw preview in tooltip
             const tc = document.getElementById('tooltipCanvas');
             tc.width = NORM_SIZE; tc.height = NORM_SIZE;
             const tctx = tc.getContext('2d');
-            // Reconstruct image from feature data
             const img = tctx.createImageData(NORM_SIZE, NORM_SIZE);
             for(let i=0; i<clicked.feature.length; i++) {
                 const v = clicked.feature[i]*255;
                 img.data[i*4]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255;
             }
             tctx.putImageData(img,0,0);
-            
-            // Focus hidden input logic (we use keydown on window)
-            document.getElementById('status').innerText = `Editing number at Row ${clicked.gridR+1}, Col ${clicked.gridC+1}... Type 1-9.`;
-            e.stopPropagation(); // Prevent deselect
+            e.stopPropagation();
         } else {
             tooltip.style.display = 'none';
             correctionTarget = null;
@@ -167,23 +153,15 @@
     window.addEventListener('keydown', e => {
         if(correctionTarget && e.key >= '0' && e.key <= '9') {
             const num = parseInt(e.key);
-            
-            // LEARN: Add to user memory
             userMemory.push({ label: num, data: correctionTarget.feature });
-            localStorage.setItem('sum10_quick_mem', JSON.stringify(userMemory));
-            
-            // Hide tooltip
+            localStorage.setItem('sum10_opt_mem', JSON.stringify(userMemory));
             tooltip.style.display = 'none';
             correctionTarget = null;
-            
-            // Re-run process to update all similar numbers
-            document.getElementById('status').innerText = `Learned! Updating board...`;
             process();
         }
-        if(correctionTarget && (e.key === 'Escape' || e.key === 'Delete' || e.key === 'x')) {
-             // Treat as garbage (bucket rim)
-             userMemory.push({ label: -1, data: correctionTarget.feature });
-             localStorage.setItem('sum10_quick_mem', JSON.stringify(userMemory));
+        if(correctionTarget && (e.key === 'Escape' || e.key === 'x')) {
+             userMemory.push({ label: -1, data: correctionTarget.feature }); // Garbage
+             localStorage.setItem('sum10_opt_mem', JSON.stringify(userMemory));
              tooltip.style.display = 'none';
              correctionTarget = null;
              process();
@@ -191,7 +169,7 @@
     });
 
 
-    // --- MAIN PIPELINE ---
+    // --- PROCESSING ---
     function process() {
         if(!srcImg) return;
         
@@ -214,24 +192,16 @@
         // 2. Map
         gridData = mapBlobsToGrid(blobs);
 
-        // 3. Recognize (Guessing)
+        // 3. Recognize
         let foundCount = 0;
-        
         blobs.forEach(b => {
             if(b.gridR === null) return;
-
             b.feature = extractFeature(ctx, b);
             
-            // CHECK USER MEMORY FIRST (High priority)
             let match = findBestMatch(b.feature, userMemory);
-            
-            // IF NO USER MATCH, CHECK SYSTEM MEMORY (Low priority, fuzzy)
-            if(!match) {
-                match = findBestMatch(b.feature, systemMemory);
-            }
+            if(!match) match = findBestMatch(b.feature, systemMemory, 50); // Higher tolerance for fuzzy sys match
 
             if(match) {
-                // Apply label
                 if(match.label !== -1) {
                     gridData[b.gridR][b.gridC] = match.label;
                     b.label = match.label;
@@ -240,48 +210,190 @@
                     b.isGarbage = true;
                 }
             } else {
-                // If totally unknown, default to checking system memory with higher error tolerance
-                // Or just leave it blank. But user asked for rough guessing.
-                // Let's force a guess from system memory even if error is high
-                const forced = findBestMatch(b.feature, systemMemory, Infinity); 
+                // If totally unsure, assume 0 (blank) to be safe, or guess wild
+                // For safety in optimization, better to miss a number than invent one
+                // But let's try a forced guess for UX
+                const forced = findBestMatch(b.feature, systemMemory, Infinity);
                 gridData[b.gridR][b.gridC] = forced.label;
                 b.label = forced.label;
-                b.lowConfidence = true; // Mark visual as "maybe wrong"
+                b.lowConf = true;
                 foundCount++;
             }
         });
 
-        // 4. Update UI
-        drawOverlay();
-        solve();
+        // 4. Optimize
+        optimizeBoard();
 
         if(foundCount > 0) {
-            document.getElementById('status').innerText = `Solved. Click any wrong number to fix it.`;
+            document.getElementById('status').innerText = `Scan Complete. Found ${currentPlan.length} move sets.`;
         } else {
-            document.getElementById('status').innerText = "No numbers seen. Adjust Slider.";
+            document.getElementById('status').innerText = "No numbers visible.";
         }
     }
 
-    // --- HELPER FUNCTIONS ---
-
-    function detectBlobs(imgData, w, h, threshold) {
-        const d = imgData.data;
-        const visited = new Uint8Array(w * h);
-        const res = [];
-        for(let i=0; i<w*h; i++) {
-            if(visited[i]) continue;
-            if((d[i*4]+d[i*4+1]+d[i*4+2])/3 > threshold) {
-                let stack=[i], minX=w, maxX=0, minY=h, maxY=0;
-                visited[i]=1;
-                while(stack.length){
-                    const c=stack.pop();
-                    const cx=c%w, cy=Math.floor(c/w);
-                    if(cx<minX)minX=cx; if(cx>maxX)maxX=cx;
-                    if(cy<minY)minY=cy; if(cy>maxY)maxY=cy;
-                    [c+1,c-1,c+w,c-w].forEach(n=>{
-                        if(n>=0 && n<w*h && !visited[n] && (d[n*4]+d[n*4+1]+d[n*4+2])/3>threshold){
-                            visited[n]=1; stack.push(n);
+    // --- THE OPTIMIZER ---
+    function optimizeBoard() {
+        let allMoves = [];
+        
+        // 1. Find ALL valid rectangles
+        for (let r1=0; r1<ROWS; r1++) {
+            for (let c1=0; c1<COLS; c1++) {
+                for (let r2=r1; r2<ROWS; r2++) {
+                    for (let c2=c1; c2<COLS; c2++) {
+                        let sum=0, count=0;
+                        for(let i=r1; i<=r2; i++){
+                            for(let j=c1; j<=c2; j++){
+                                let v = gridData[i][j];
+                                sum+=v; if(v>0) count++;
+                            }
                         }
+                        
+                        if(sum === 10 && count > 0) {
+                            // Calculate Score
+                            // Count is king. Area is tie breaker (larger area eats more blanks, usually good)
+                            allMoves.push({
+                                r1, c1, r2, c2, count,
+                                area: (r2-r1+1)*(c2-c1+1)
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Sort Moves by Quality
+        // Priority 1: Count (Descending) -> 3 numbers > 2 numbers
+        // Priority 2: Area (Descending) -> Clearing more blanks is usually better to shift board
+        allMoves.sort((a, b) => {
+            if (b.count !== a.count) return b.count - a.count;
+            return b.area - a.area;
+        });
+
+        // 3. Select Non-Overlapping Set
+        currentPlan = [];
+        let occupied = new Set(); // Stores "r,c"
+
+        for (let m of allMoves) {
+            let clash = false;
+            // Check overlap
+            for(let i=m.r1; i<=m.r2; i++){
+                for(let j=m.c1; j<=m.c2; j++){
+                    if(occupied.has(`${i},${j}`)) clash = true;
+                }
+            }
+
+            if(!clash) {
+                currentPlan.push(m);
+                // Mark occupied
+                for(let i=m.r1; i<=m.r2; i++){
+                    for(let j=m.c1; j<=m.c2; j++){
+                        occupied.add(`${i},${j}`);
+                    }
+                }
+            }
+        }
+
+        drawResults();
+    }
+
+    // --- DRAWING ---
+    function drawResults() {
+        const cvs = document.getElementById('overlayCanvas');
+        const ctx = cvs.getContext('2d');
+        ctx.clearRect(0,0,cvs.width,cvs.height);
+
+        // 1. Draw Numbers
+        blobs.forEach(b => {
+            if(b.isGarbage || !b.label) return;
+            ctx.fillStyle = b.lowConf ? "#ffff00" : "#ffffff";
+            ctx.font = "bold 12px monospace";
+            ctx.fillText(b.label, b.x+2, b.y-2);
+        });
+
+        // 2. Draw Plan Boxes
+        const btn = document.getElementById('solveBtn');
+        if(currentPlan.length > 0) {
+            btn.disabled = false;
+            btn.className = "btn active";
+            btn.innerHTML = `DO ${currentPlan.length} MOVES (Click to Clear)`;
+
+            // Helper to get pixel bounds from grid coords
+            // (Reusing the mapBlobs logic inversely or just finding min/max blobs in region)
+            // For accuracy, we find the blobs involved
+            
+            currentPlan.forEach(m => {
+                let minX=9999, maxX=0, minY=9999, maxY=0;
+                let found = false;
+                blobs.forEach(b => {
+                     // Check if blob center is inside grid cell
+                     // This is robust against drift
+                    if(b.gridR >= m.r1 && b.gridR <= m.r2 && b.gridC >= m.c1 && b.gridC <= m.c2) {
+                        if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
+                        if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;
+                        found=true;
+                    }
+                });
+
+                if(found) {
+                    const isGold = m.count >= 3;
+                    const color = isGold ? "rgba(255, 215, 0" : "rgba(0, 200, 83"; // Gold vs Green
+                    
+                    ctx.fillStyle = color + ", 0.3)";
+                    ctx.strokeStyle = color + ", 1)";
+                    ctx.lineWidth = isGold ? 4 : 2;
+
+                    const p = 4;
+                    ctx.fillRect(minX-p, minY-p, (maxX-minX)+p*2, (maxY-minY)+p*2);
+                    ctx.strokeRect(minX-p, minY-p, (maxX-minX)+p*2, (maxY-minY)+p*2);
+
+                    // Draw Count Badge
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(minX-p, minY-p-15, 20, 15);
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 10px sans-serif";
+                    ctx.fillText(m.count, minX-p+7, minY-p-4);
+                }
+            });
+        } else {
+            btn.disabled = true;
+            btn.className = "btn";
+            btn.innerHTML = "NO MOVES FOUND";
+        }
+    }
+
+    function applyMoves() {
+        if(currentPlan.length === 0) return;
+        // Zero out data
+        currentPlan.forEach(m => {
+            for(let r=m.r1; r<=m.r2; r++) {
+                for(let c=m.c1; c<=m.c2; c++) {
+                    gridData[r][c] = 0;
+                }
+            }
+        });
+        // Filter blobs to prevent re-detecting them in this session
+        // (Simulates them being removed)
+        let occupied = new Set();
+        currentPlan.forEach(m => {
+             for(let r=m.r1; r<=m.r2; r++) for(let c=m.c1; c<=m.c2; c++) occupied.add(`${r},${c}`);
+        });
+        blobs = blobs.filter(b => !occupied.has(`${b.gridR},${b.gridC}`));
+        
+        optimizeBoard(); // Find next set of moves immediately
+    }
+
+    // --- UTILS ---
+    function detectBlobs(imgData, w, h, t) {
+        const d=imgData.data, v=new Uint8Array(w*h), res=[];
+        for(let i=0; i<w*h; i++) {
+            if(v[i])continue;
+            if((d[i*4]+d[i*4+1]+d[i*4+2])/3 > t) {
+                let s=[i], minX=w, maxX=0, minY=h, maxY=0; v[i]=1;
+                while(s.length){
+                    const c=s.pop(), cx=c%w, cy=Math.floor(c/w);
+                    if(cx<minX)minX=cx; if(cx>maxX)maxX=cx; if(cy<minY)minY=cy; if(cy>maxY)maxY=cy;
+                    [c+1,c-1,c+w,c-w].forEach(n=>{
+                        if(n>=0 && n<w*h && !v[n] && (d[n*4]+d[n*4+1]+d[n*4+2])/3 > t){v[n]=1;s.push(n);}
                     });
                 }
                 const width=maxX-minX+1, height=maxY-minY+1;
@@ -292,163 +404,49 @@
     }
 
     function extractFeature(ctx, b) {
-        const tc = document.createElement('canvas');
-        tc.width = NORM_SIZE; tc.height = NORM_SIZE;
-        const tctx = tc.getContext('2d');
-        tctx.drawImage(ctx.canvas, b.x, b.y, b.w, b.h, 0, 0, NORM_SIZE, NORM_SIZE);
-        const id = tctx.getImageData(0,0,NORM_SIZE,NORM_SIZE).data;
-        const arr = [];
-        for(let i=0; i<id.length; i+=4) arr.push(id[i]>100?1:0);
-        return arr;
+        const c=document.createElement('canvas'); c.width=NORM_SIZE; c.height=NORM_SIZE;
+        const x=c.getContext('2d'); x.drawImage(ctx.canvas,b.x,b.y,b.w,b.h,0,0,NORM_SIZE,NORM_SIZE);
+        const d=x.getImageData(0,0,NORM_SIZE,NORM_SIZE).data, a=[];
+        for(let i=0; i<d.length; i+=4) a.push(d[i]>100?1:0);
+        return a;
+    }
+
+    function findBestMatch(f, lib, maxErr=30) {
+        let best=null, min=Infinity;
+        lib.forEach(l=>{
+            let e=0; for(let i=0;i<256;i++)if(f[i]!==l.data[i])e++;
+            if(e<min){min=e; best=l;}
+        });
+        return min<=maxErr ? best : null;
+    }
+
+    function mapBlobsToGrid(blobs) {
+        let g=Array(ROWS).fill().map(()=>Array(COLS).fill(0));
+        if(!blobs.length) return g;
+        let minX=9999, maxX=0, minY=9999, maxY=0;
+        blobs.forEach(b=>{if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w; if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;});
+        const tW=maxX-minX, tH=maxY-minY, cW=tW/9.5, cH=tH/14.5;
+        blobs.forEach(b=>{
+            const cx=b.x+b.w/2, cy=b.y+b.h/2;
+            const c=Math.round((cx-minX)/(tW/9)), r=Math.round((cy-minY)/(tH/14));
+            if(c>=0 && c<COLS && r>=0 && r<ROWS) { b.gridR=r; b.gridC=c; } else { b.gridR=null; }
+        });
+        return g;
     }
 
     function generateSystemMemory() {
-        // Convert ASCII art into 16x16 feature arrays
-        for(let num in ASCII_DIGITS) {
-            const art = ASCII_DIGITS[num];
-            // Map 5x7 art to 16x16 grid roughly
-            const feature = new Array(256).fill(0);
-            for(let r=0; r<16; r++) {
-                for(let c=0; c<16; c++) {
-                    // Map 16 coords to 7x5 coords
-                    const ar = Math.floor(r / (16/7));
-                    const ac = Math.floor(c / (16/5));
-                    if(art[ar] && art[ar][ac] === '#') {
-                        feature[r*16+c] = 1;
-                    }
-                }
+        for(let n in ASCII_DIGITS) {
+            const art=ASCII_DIGITS[n], f=new Array(256).fill(0);
+            for(let r=0;r<16;r++) for(let c=0;c<16;c++) {
+                const ar=Math.floor(r/(16/7)), ac=Math.floor(c/(16/5));
+                if(art[ar] && art[ar][ac]==='#') f[r*16+c]=1;
             }
-            systemMemory.push({ label: parseInt(num), data: feature });
+            systemMemory.push({label:parseInt(n), data:f});
         }
     }
 
-    function findBestMatch(feature, library, maxError=40) { // 40/256 error allowed (~15%)
-        let best = null;
-        let minErr = Infinity;
-        library.forEach(item => {
-            let err = 0;
-            for(let i=0; i<256; i++) if(feature[i]!==item.data[i]) err++;
-            if(err < minErr) { minErr = err; best = item; }
-        });
-        if(minErr <= maxError) return best;
-        return null;
-    }
-
-    function mapBlobsToGrid(rawBlobs) {
-        let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-        if(rawBlobs.length === 0) return grid;
-        let minX=9999, maxX=0, minY=9999, maxY=0;
-        rawBlobs.forEach(b => {
-            if(b.x<minX)minX=b.x; if(b.x+b.w>maxX)maxX=b.x+b.w;
-            if(b.y<minY)minY=b.y; if(b.y+b.h>maxY)maxY=b.y+b.h;
-        });
-        const totalW = maxX-minX, totalH = maxY-minY;
-        const cellW = totalW/9.5, cellH = totalH/14.5;
-        rawBlobs.forEach(b => {
-            const cx = b.x+b.w/2, cy = b.y+b.h/2;
-            const c = Math.round((cx-minX)/(totalW/9));
-            const r = Math.round((cy-minY)/(totalH/14));
-            if(c>=0 && c<COLS && r>=0 && r<ROWS) {
-                b.gridR = r; b.gridC = c;
-            } else {
-                b.gridR = null;
-            }
-        });
-        return grid;
-    }
-
-    function solve() {
-        let best = null;
-        let maxScore = -1;
-        for (let r1=0; r1<ROWS; r1++) {
-            for (let c1=0; c1<COLS; c1++) {
-                for (let r2=r1; r2<ROWS; r2++) {
-                    for (let c2=c1; c2<COLS; c2++) {
-                        let s=0, c=0;
-                        for(let i=r1; i<=r2; i++){
-                            for(let j=c1; j<=c2; j++){
-                                let v = gridData[i][j];
-                                s+=v; if(v>0) c++;
-                            }
-                        }
-                        if(s===10 && c>0) {
-                            let score = (c*1000) + ((r2-r1)*(c2-c1));
-                            if(score > maxScore) { maxScore=score; best={r1,c1,r2,c2,c}; }
-                        }
-                    }
-                }
-            }
-        }
-        currentBest = best;
-        const btn = document.getElementById('solveBtn');
-        if(best) {
-            btn.disabled = false;
-            btn.className = "btn active";
-            btn.innerHTML = `MATCH FOUND (Clears ${best.c})`;
-            drawOverlay(best);
-        } else {
-            btn.disabled = true;
-            btn.className = "btn";
-            btn.innerHTML = "NO MOVES";
-            drawOverlay();
-        }
-    }
-
-    function drawOverlay(highlight=null) {
-        const cvs = document.getElementById('overlayCanvas');
-        const ctx = cvs.getContext('2d');
-        ctx.clearRect(0,0,cvs.width,cvs.height);
-
-        blobs.forEach(b => {
-            if(b.isGarbage || !b.label) return;
-            
-            // Text color based on confidence
-            ctx.fillStyle = b.lowConfidence ? "#ffff00" : "#00ff00";
-            ctx.font = "bold 14px monospace";
-            ctx.fillText(b.label, b.x, b.y-2);
-            
-            ctx.strokeStyle = b.lowConfidence ? "rgba(255,255,0,0.3)" : "rgba(0,255,0,0.3)";
-            ctx.strokeRect(b.x, b.y, b.w, b.h);
-        });
-
-        if(highlight) {
-            let minX=9999, maxX=0, minY=9999, maxY=0;
-            let found = false;
-            blobs.forEach(b => {
-                if(b.gridR>=highlight.r1 && b.gridR<=highlight.r2 && b.gridC>=highlight.c1 && b.gridC<=highlight.c2 && b.label>0) {
-                    if(b.x<minX) minX=b.x; if(b.x+b.w>maxX) maxX=b.x+b.w;
-                    if(b.y<minY) minY=b.y; if(b.y+b.h>maxY) maxY=b.y+b.h;
-                    found=true;
-                }
-            });
-            if(found) {
-                const pad = 4;
-                ctx.strokeStyle = "#00e676";
-                ctx.lineWidth = 4;
-                ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
-                ctx.fillStyle = "rgba(0, 230, 118, 0.3)";
-                ctx.fillRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
-            }
-        }
-    }
-
-    function confirmMove() {
-        if(!currentBest) return;
-        for(let r=currentBest.r1; r<=currentBest.r2; r++) {
-            for(let c=currentBest.c1; c<=currentBest.c2; c++) {
-                gridData[r][c] = 0;
-            }
-        }
-        blobs = blobs.filter(b => !(b.gridR>=currentBest.r1 && b.gridR<=currentBest.r2 && b.gridC>=currentBest.c1 && b.gridC<=currentBest.c2));
-        solve();
-    }
-    
     function resetMem() {
-        if(confirm("Clear learned numbers?")) {
-            localStorage.removeItem('sum10_quick_mem');
-            userMemory = [];
-            process();
-        }
+        if(confirm("Clear memory?")) { localStorage.removeItem('sum10_opt_mem'); userMemory=[]; process(); }
     }
 </script>
 </body>
