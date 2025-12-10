@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sum-10 Focus Solver</title>
+    <title>Sum-10 Focus Solver (Clean View)</title>
     <style>
         :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --gold: #ffd700; --green: #00c853; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #e0e0e0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -40,7 +40,7 @@
 </head>
 <body>
 
-    <h2 style="color:var(--accent); margin-top:0;">satsuki sho</h2>
+    <h2 style="color:var(--accent); margin-top:0;">Tokyo Yushun</h2>
     
     <div class="layout">
         <div class="stage" id="stageContainer">
@@ -67,7 +67,7 @@
                 1. Perform the <span class="highlight">Green Highlighted</span> move.<br>
                 2. Click <span class="highlight">MOVE DONE</span>.<br>
                 3. Repeat.<br><br>
-                <span style="color:#666; font-size:0.9em">(Click any large yellow number to correct it)</span>
+                <span style="color:#666; font-size:0.9em">(Click any small number to correct it)</span>
             </div>
             
             <div style="margin-top:20px; text-align:center; font-size:0.7em; color:#555; cursor:pointer;" onclick="resetMem()">
@@ -82,7 +82,7 @@
     const COLS = 10;
     const NORM_SIZE = 16;
     
-    // --- ASCII HEURISTICS (Baseline) ---
+    // --- ASCII HEURISTICS ---
     const ASCII_DIGITS = {
         1: ["  #  "," ##  ","  #  ","  #  ","  #  ","  #  "," ### "],
         2: [" ### ","#   #","    #","   # ","  #  "," #   ","#####"],
@@ -120,7 +120,6 @@
         }
     });
 
-    // Correction Logic
     const stage = document.getElementById('stageContainer');
     const tooltip = document.getElementById('correctionTooltip');
     let correctionTarget = null; 
@@ -131,7 +130,6 @@
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
-        // Find clicked blob
         const clicked = blobs.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
 
         if(clicked) {
@@ -163,7 +161,7 @@
             localStorage.setItem('sum10_focus_mem', JSON.stringify(userMemory));
             tooltip.style.display = 'none';
             correctionTarget = null;
-            process(); // Re-process to apply correction everywhere
+            process(); 
         }
         if(correctionTarget && (e.key.toLowerCase() === 'x' || e.key === 'Delete')) {
              userMemory.push({ label: -1, data: correctionTarget.feature });
@@ -174,7 +172,7 @@
         }
     });
 
-    // --- MAIN PIPELINE ---
+    // --- PROCESS ---
     function process() {
         if(!srcImg) return;
         
@@ -194,7 +192,6 @@
         blobs = detectBlobs(raw, cvs.width, cvs.height, thresh);
         gridData = mapBlobsToGrid(blobs);
 
-        // Recognize
         blobs.forEach(b => {
             if(b.gridR === null) return;
             b.feature = extractFeature(ctx, b);
@@ -217,14 +214,11 @@
             }
         });
 
-        // Start Solver loop
         solveNext();
     }
 
-    // --- SOLVER (Single Step) ---
     function solveNext() {
         let allMoves = [];
-        
         for (let r1=0; r1<ROWS; r1++) {
             for (let c1=0; c1<COLS; c1++) {
                 for (let r2=r1; r2<ROWS; r2++) {
@@ -236,7 +230,6 @@
                                 sum+=v; if(v>0) count++;
                             }
                         }
-                        
                         if(sum === 10 && count > 0) {
                             allMoves.push({
                                 r1, c1, r2, c2, count,
@@ -247,16 +240,12 @@
                 }
             }
         }
-
-        // Sort: Priority 1 = Count, Priority 2 = Area
         allMoves.sort((a, b) => {
             if (b.count !== a.count) return b.count - a.count;
             return b.area - a.area;
         });
 
-        // Pick ONLY the best move
         currentMove = allMoves.length > 0 ? allMoves[0] : null;
-        
         drawScene();
     }
 
@@ -266,38 +255,37 @@
         const ctx = cvs.getContext('2d');
         ctx.clearRect(0,0,cvs.width,cvs.height);
 
-        // 1. Draw ALL Numbers (Large & Clear)
+        // 1. Draw Numbers (Small, Top-Left)
         blobs.forEach(b => {
             if(b.isGarbage || !b.label) return;
             
-            // Calculate center
-            const cx = b.x + b.w/2;
-            const cy = b.y + b.h/2;
+            // Draw thin bounding box for reference
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(b.x, b.y, b.w, b.h);
 
-            ctx.font = "bold 24px monospace"; // BIG TEXT
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
+            // Draw Number small in corner
+            ctx.font = "bold 12px monospace";
+            ctx.textBaseline = "top";
+            ctx.textAlign = "left";
             
-            // Stroke (Outline) for readability
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = "black";
-            ctx.strokeText(b.label, cx, cy);
-
-            // Fill
-            ctx.fillStyle = b.lowConf ? "#ffff00" : "#ffeb3b"; // Bright Yellow
-            ctx.fillText(b.label, cx, cy);
+            // Text shadow for contrast
+            ctx.fillStyle = "black";
+            ctx.fillText(b.label, b.x + 1, b.y + 1);
+            
+            // Foreground color
+            ctx.fillStyle = b.lowConf ? "#ffff00" : "#00e676";
+            ctx.fillText(b.label, b.x, b.y);
         });
 
-        // 2. Draw The Single Best Move
+        // 2. Draw Best Move
         const btn = document.getElementById('solveBtn');
-        
         if(currentMove) {
             btn.disabled = false;
             btn.className = "btn active";
             btn.innerHTML = `MOVE DONE<br><span style="font-size:0.6em; font-weight:normal">Clears ${currentMove.count} numbers</span>`;
             document.getElementById('status').innerText = `Best Move Found! Clears ${currentMove.count}.`;
 
-            // Find bounds
             let minX=9999, maxX=0, minY=9999, maxY=0;
             let found = false;
             
@@ -312,14 +300,12 @@
 
             if(found) {
                 const pad = 6;
-                ctx.strokeStyle = "#00e676"; // Bright Green
+                ctx.strokeStyle = "#00e676";
                 ctx.lineWidth = 5;
                 ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
-                
                 ctx.fillStyle = "rgba(0, 230, 118, 0.2)";
                 ctx.fillRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
             }
-
         } else {
             btn.disabled = true;
             btn.className = "btn";
@@ -330,21 +316,15 @@
 
     function applyMove() {
         if(!currentMove) return;
-        
-        // 1. Zero out the grid data for this move
         for(let r=currentMove.r1; r<=currentMove.r2; r++) {
             for(let c=currentMove.c1; c<=currentMove.c2; c++) {
                 gridData[r][c] = 0;
             }
         }
-
-        // 2. Remove the associated blobs visually so they disappear
         blobs = blobs.filter(b => 
             !(b.gridR >= currentMove.r1 && b.gridR <= currentMove.r2 && 
               b.gridC >= currentMove.c1 && b.gridC <= currentMove.c2)
         );
-
-        // 3. Immediately find next move
         solveNext();
     }
 
